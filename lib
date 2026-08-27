@@ -2921,6 +2921,7 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 			SecureSignal = UserInputService.InputBegan:Connect(function(Input)
 				if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
 					if not NeverLose:IsMouseOverFrame(DropdownLib.BlockRoot) and not NeverLose:IsMouseOverFrame(Dropdown) then
+						game:getService('RunService').RenderStepped:Wait()
 						if SecureSignal then
 							SecureSignal:Disconnect();
 							SecureSignal = nil;
