@@ -199,7 +199,7 @@ NeverLose.IsMosueOverOtherFrame = false;
 NeverLose.GlobalLogo = "rbxassetid://120358385035996";
 NeverLose.ImageColorMapping = "rbxassetid://4155801252";
 NeverLose.IsDropdownOn = false;
-
+NeverLose.IsColorPickerOn = false;
 
 if getcustomasset then
 	local link = "https://github.com/4lpaca-pin/NeverLose/blob/main/assets/%s?raw=true";
@@ -2232,7 +2232,7 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 
 			reciveSignal = UserInputService.InputBegan:Connect(function(Input)
 				if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
-					if not NeverLose:IsMouseOverFrame(Window.Root) and not NeverLose:IsMouseOverFrame(Option) and NeverLose.IsDropdownOn == false then
+					if not NeverLose:IsMouseOverFrame(Window.Root) and not NeverLose:IsMouseOverFrame(Option) and NeverLose.IsDropdownOn == false and NeverLose.IsColorPickerOn == false then
 						if reciveSignal then
 							reciveSignal:Disconnect();
 							reciveSignal = nil;	
