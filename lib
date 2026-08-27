@@ -2337,6 +2337,7 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 			signal = UserInputService.InputBegan:Connect(function(Input)
 				if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
 					if not NeverLose:IsMouseOverFrame(ColorPicker) and not NeverLose:IsMouseOverFrame(BackendM.Root) then
+						game:getService('RunService').RenderStepped:Wait()
 						if signal then
 							signal:Disconnect();
 							signal = nil;
