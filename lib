@@ -2336,6 +2336,7 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 			end;
 
 			BackendM.SetRender(true);
+			NeverLose.IsColorPickerOn = true;
 
 			signal = UserInputService.InputBegan:Connect(function(Input)
 				if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
@@ -2345,7 +2346,7 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 							signal:Disconnect();
 							signal = nil;
 						end;
-
+						NeverLose.IsColorPickerOn = false;
 						BackendM.SetRender(false);
 					end;
 				end;
