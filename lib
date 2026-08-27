@@ -1617,7 +1617,6 @@ function NeverLose:CreateColorPicker(HandleFrame: Frame)
 	NeverLose:AddSignal(ColorPickerHandler.InputEnded:Connect(function(Input)
 		if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
 			ColorPickerLib.IsHold = false;
-			NeverLose.IsColorPickerOn = false;
 		end;
 	end));
 
