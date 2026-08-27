@@ -1,10 +1,3 @@
---[[
-                          Neverlose.cc UI Library
-    Author: 4lpaca
-	License: MIT
-    Discord: https://arceney.win/discord
-    Other-Projects: https://4lpaca.win
-]]
 
 do
 	local Constant = 'L'..'P'..'H'..'_NO_VIRTUALIZE';
@@ -205,6 +198,8 @@ NeverLose.NameRegisitry = {};
 NeverLose.IsMosueOverOtherFrame = false;
 NeverLose.GlobalLogo = "rbxassetid://120358385035996";
 NeverLose.ImageColorMapping = "rbxassetid://4155801252";
+NeverLose.IsDropdownOn = false;
+
 
 if getcustomasset then
 	local link = "https://github.com/4lpaca-pin/NeverLose/blob/main/assets/%s?raw=true";
@@ -2237,7 +2232,7 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 
 			reciveSignal = UserInputService.InputBegan:Connect(function(Input)
 				if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
-					if not NeverLose:IsMouseOverFrame(Window.Root) and not NeverLose:IsMouseOverFrame(Option) then
+					if not NeverLose:IsMouseOverFrame(Window.Root) and not NeverLose:IsMouseOverFrame(Option) and NeverLose.IsDropdownOn == false then
 						if reciveSignal then
 							reciveSignal:Disconnect();
 							reciveSignal = nil;	
@@ -2921,6 +2916,7 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 
 			DropdownLib.SetFrameRender(true);
 			NeverLose.IsMosueOverOtherFrame = true;
+			NeverLose.IsDropdownOn = true;
 
 			SecureSignal = UserInputService.InputBegan:Connect(function(Input)
 				if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
@@ -2929,7 +2925,7 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 							SecureSignal:Disconnect();
 							SecureSignal = nil;
 						end;
-
+						NeverLose.IsDropdownOn = false;
 						NeverLose.IsMosueOverOtherFrame = false;
 						DropdownLib.SetFrameRender(false);
 					end;
