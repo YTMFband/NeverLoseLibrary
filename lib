@@ -5744,7 +5744,7 @@ function NeverLose:CreateWindow(Config)
 
 					ConfigLib:RefreshConfig();
 
-					Logging.new("folder","Loaded Default Config",3.5);
+					--[[Logging.new("folder","Loaded Default Config",3.5);
 					
 					task.spawn(function()
 						while true do task.wait(5.75);
@@ -5752,7 +5752,7 @@ function NeverLose:CreateWindow(Config)
 								writefile(Window.ConfigFolder..'/Default',ConfigLib:GetData(true));
 							end;
 						end;
-					end);
+					end);]]--
 				end;
 			end;
 		end);
