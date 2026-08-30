@@ -2202,6 +2202,7 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 		Icon.TextSize = 16.000
 		Icon.TextTransparency = 0.400
 		Icon.TextWrapped = true
+		Icon.TextScaled = true
 
 		UICorner.CornerRadius = UDim.new(0, 4)
 		UICorner.Parent = Option
