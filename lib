@@ -3434,6 +3434,7 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 		BasedLabel.Text = Name
 		BasedLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 		BasedLabel.TextSize = 13.000
+		BasedLabel.TextScaled = true
 		BasedLabel.TextTransparency = 0.35
 		BasedLabel.TextXAlignment = Enum.TextXAlignment.Left
 		BasedLabel.AutomaticSize = Enum.AutomaticSize.X
