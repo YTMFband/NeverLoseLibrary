@@ -1330,8 +1330,8 @@ function NeverLose:CreateOptionWindow(Frame: Frame, Zindex)
     Window.SetRender(false);
     Window.Signal:Connect(Window.SetRender)
 
+
     OptionHandler.Destroying:Connect(function()
-        print('gfdgdgfdffdg')
         if FollowingThread then
             task.cancel(FollowingThread);
         end
@@ -4036,7 +4036,7 @@ function NeverLose:CreateWindow(Config)
 
 			Window.Shadow:Render(true);
 		else
-
+            print('gfdgfdgfdgdgdgd')
 			NeverLose.PlayAnimate(WindowFrame , SlowyTween , {
 				BackgroundTransparency = 1,
 				Size = Window.Size + UDim2.fromOffset(-15,-15)
