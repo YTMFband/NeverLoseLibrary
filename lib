@@ -1228,129 +1228,121 @@ function NeverLose:CreateShadow(parent , RollingEffect)
 	return Shadow;
 end;
 
-function NeverLose:CreateOptionWindow(Frame: Frame , Zindex)
-	Zindex = Zindex or 9;
+function NeverLose:CreateOptionWindow(Frame: Frame, Zindex)
+    Zindex = Zindex or 9;
 
-	local Window = {
-		Signal = NeverLose:CreateSignal(false),
-	};
+    local Window = {
+        Signal = NeverLose:CreateSignal(false),
+    };
 
-	local OptionHandler = Instance.new("Frame")
-	local UICorner = Instance.new("UICorner")
-	local UIListLayout = Instance.new("UIListLayout")
-	local UIStroke = Instance.new("UIStroke")
-	local shadow = NeverLose:CreateShadow(OptionHandler);
+    local OptionHandler = Instance.new("Frame")
+    local UICorner = Instance.new("UICorner")
+    local UIListLayout = Instance.new("UIListLayout")
+    local UIStroke = Instance.new("UIStroke")
+    local shadow = NeverLose:CreateShadow(OptionHandler);
 
-	OptionHandler.Name = NeverLose.RandomString();
-	OptionHandler.Parent = NeverLose.ScreenGui
-	OptionHandler.AnchorPoint = Vector2.new(0, 0)
-	OptionHandler.BackgroundColor3 = Color3.fromRGB(20, 22, 27)
-	OptionHandler.BackgroundTransparency = 0.035
-	OptionHandler.BorderColor3 = Color3.fromRGB(0, 0, 0)
-	OptionHandler.BorderSizePixel = 0
-	OptionHandler.ClipsDescendants = true
-	OptionHandler.Position = UDim2.new(255,255,255,255)
-	OptionHandler.Size = UDim2.new(0, 220, 0, 75)
-	OptionHandler.ZIndex = Zindex + 9
+    OptionHandler.Name = NeverLose.RandomString();
+    OptionHandler.Parent = NeverLose.ScreenGui
+    OptionHandler.AnchorPoint = Vector2.new(0, 0)
+    OptionHandler.BackgroundColor3 = Color3.fromRGB(20, 22, 27)
+    OptionHandler.BackgroundTransparency = 0.035
+    OptionHandler.BorderColor3 = Color3.fromRGB(0, 0, 0)
+    OptionHandler.BorderSizePixel = 0
+    OptionHandler.ClipsDescendants = true
+    OptionHandler.Position = UDim2.new(255,255,255,255)
+    OptionHandler.Size = UDim2.new(0, 220, 0, 75)
+    OptionHandler.ZIndex = Zindex + 9
+    OptionHandler.Visible = false
 
-	UICorner.CornerRadius = UDim.new(0, 10)
-	UICorner.Parent = OptionHandler
+    UICorner.CornerRadius = UDim.new(0, 10)
+    UICorner.Parent = OptionHandler
 
-	UIListLayout.Parent = OptionHandler
-	UIListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-	UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    UIListLayout.Parent = OptionHandler
+    UIListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
 
-	UIStroke.Transparency = 0.650
-	UIStroke.Color = Color3.fromRGB(45, 48, 58)
-	UIStroke.Parent = OptionHandler
+    UIStroke.Transparency = 0.650
+    UIStroke.Color = Color3.fromRGB(45, 48, 58)
+    UIStroke.Parent = OptionHandler
 
-	NeverLose:AddSignal(UIListLayout:GetPropertyChangedSignal('AbsoluteContentSize'):Connect(LPH_NO_VIRTUALIZE(function()
-		NeverLose.PlayAnimate(OptionHandler , SlowyTween , {
-			Size = UDim2.new(0, 220, 0, UIListLayout.AbsoluteContentSize.Y - 1)
-		})
-	end)));
+    NeverLose:AddSignal(UIListLayout:GetPropertyChangedSignal('AbsoluteContentSize'):Connect(LPH_NO_VIRTUALIZE(function()
+        NeverLose.PlayAnimate(OptionHandler, SlowyTween, {
+            Size = UDim2.new(0, 220, 0, UIListLayout.AbsoluteContentSize.Y - 1)
+        })
+    end)));
 
-	NeverLose:AddSignal(OptionHandler:GetPropertyChangedSignal('BackgroundTransparency'):Connect(LPH_NO_VIRTUALIZE(function()
-		if OptionHandler.BackgroundTransparency > 0.9 then
-			OptionHandler.Visible = false;
-			UIListLayout.Parent = nil;
-			OptionHandler.Parent = nil;
-		else
-			OptionHandler.Visible = true;
-			UIListLayout.Parent = OptionHandler
+    local FollowingThread;
+    local SetPosition = LPH_NO_VIRTUALIZE(function()
+        if NeverLose:MoreThanHalfY(Frame.AbsolutePosition.Y + 65) then
+            OptionHandler.AnchorPoint = Vector2.new(0, 1)
+        else
+            OptionHandler.AnchorPoint = Vector2.new(0, 0)
+        end;
 
-			if NeverLose.Global3DRenderMode then
-				OptionHandler.Parent = NeverLose.GlobalSurfaceGui;
-			else
-				OptionHandler.Parent = NeverLose.ScreenGui;
-			end;
-		end
-	end)));
+        OptionHandler.Position = UDim2.fromOffset(Frame.AbsolutePosition.X + 18, Frame.AbsolutePosition.Y + 65);
+    end);
 
-	local FollowingThread;
-	local SetPosition = LPH_NO_VIRTUALIZE(function()
-		if NeverLose:MoreThanHalfY(Frame.AbsolutePosition.Y + 65) then
-			OptionHandler.AnchorPoint = Vector2.new(0,1)
-		else
-			OptionHandler.AnchorPoint = Vector2.new(0,0)
-		end;
+    Window.SetRender = LPH_NO_VIRTUALIZE(function(value)
+        if FollowingThread then
+            task.cancel(FollowingThread);
+            FollowingThread = nil;
+        end;
 
-		OptionHandler.Position = UDim2.fromOffset(Frame.AbsolutePosition.X + 18 , Frame.AbsolutePosition.Y + 65);
-	end);
+        if value then
+            SetPosition();
+            OptionHandler.Visible = true;
 
-	Window.SetRender = LPH_NO_VIRTUALIZE(function(value)
-		if FollowingThread then
-			task.cancel(FollowingThread);
-			FollowingThread = nil;
-		end;
+            NeverLose.PlayAnimate(OptionHandler, SlowyTween, {
+                BackgroundTransparency = 0.035
+            })
 
-		if value then
-			SetPosition();
+            NeverLose.PlayAnimate(UIStroke, SlowyTween, {
+                Transparency = 0.650
+            })
 
-			NeverLose.PlayAnimate(OptionHandler , SlowyTween , {
-				BackgroundTransparency = 0.035
-			})
+            shadow:Render(true);
 
-			NeverLose.PlayAnimate(UIStroke , SlowyTween , {
-				Transparency = 0.650
-			})
+            FollowingThread = task.spawn(function()
+                while true do 
+                    task.wait()
+                    SetPosition();
+                end
+            end)
+        else
+            NeverLose.PlayAnimate(OptionHandler, SlowyTween, {
+                BackgroundTransparency = 1
+            })
 
-			shadow:Render(true);
+            NeverLose.PlayAnimate(UIStroke, SlowyTween, {
+                Transparency = 1
+            })
 
-			if NeverLose.Global3DRenderMode then
-				OptionHandler.Parent = NeverLose.GlobalSurfaceGui;
-			else
-				OptionHandler.Parent = NeverLose.ScreenGui;
-			end;
+            shadow:Render(false);
+            
+            task.delay(0.2, function()
+                if OptionHandler.BackgroundTransparency >= 0.9 then
+                    OptionHandler.Visible = false;
+                end
+            end)
+        end;
+    end);
 
-			FollowingThread = task.spawn(function()
-				while true do task.wait()
-					SetPosition();
-				end
-			end)
-		else
-			NeverLose.PlayAnimate(OptionHandler , SlowyTween , {
-				BackgroundTransparency = 1
-			})
+    Window.SetRender(false);
+    Window.Signal:Connect(Window.SetRender)
 
-			NeverLose.PlayAnimate(UIStroke , SlowyTween , {
-				Transparency = 1
-			})
+    OptionHandler.Destroying:Connect(function()
+        if FollowingThread then
+            task.cancel(FollowingThread);
+        end
+    end)
 
-			shadow:Render(false);
-		end;
-	end);
+    local Payback = NeverLose:RegisiterItem(OptionHandler, Window.Signal);
 
-	Window.SetRender(false);
-	Window.Signal:Connect(Window.SetRender)
+    Payback.Winbdow = Window;
+    Payback.Root = OptionHandler;
+    Payback.Signal = Window.Signal;
 
-	local Payback = NeverLose:RegisiterItem(OptionHandler , Window.Signal);
-
-	Payback.Winbdow = Window;
-	Payback.Root = OptionHandler;
-	Payback.Signal = Window.Signal;
-
-	return Payback;
+    return Payback;
 end;
 
 function NeverLose:CreateColorPicker(HandleFrame: Frame)
