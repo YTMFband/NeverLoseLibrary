@@ -1331,6 +1331,7 @@ function NeverLose:CreateOptionWindow(Frame: Frame, Zindex)
     Window.Signal:Connect(Window.SetRender)
 
     OptionHandler.Destroying:Connect(function()
+        print('gfdgdgfdffdg')
         if FollowingThread then
             task.cancel(FollowingThread);
         end
