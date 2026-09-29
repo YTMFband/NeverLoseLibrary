@@ -2219,13 +2219,22 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 				NeverLose.PlayAnimate(Icon , SlowyTween , {
 					TextTransparency = 1
 				})
-
-                print('gfdgdfdgdgd')
 			end;
 		end);
 
-		Window.SetRender(Signal:GetValue());
-		Signal:Connect(Window.SetRender);
+        Window.SetRender(Signal:GetValue());
+        Signal:Connect(Window.SetRender)
+
+        if NeverLose._MainWindowSignal then
+            NeverLose._MainWindowSignal:Connect(function(val)
+                if not val then
+                    Window.Signal:SetValue(false)
+                end
+            end)
+        end
+
+
+
 
 		local bthg = NeverLose:CreateInput(Option , LPH_NO_VIRTUALIZE(function()
 			if reciveSignal then
@@ -3870,6 +3879,7 @@ function NeverLose:CreateWindow(Config)
 	};
 
 	NeverLose.GlobalLogo = Window.Logo;
+    NeverLose._MainWindowSignal = Window.Signal;
 
 	local Logging = NeverLose:CreateLogger();
 	if not isfolder(Window.ConfigFolder) then
