@@ -1409,6 +1409,14 @@ function NeverLose:CreateOptionWindow(Frame: Frame , Zindex)
 
 			table.insert(FollowingConnections , Frame:GetPropertyChangedSignal('AbsolutePosition'):Connect(SetPosition));
 			table.insert(FollowingConnections , NeverLose.ScreenGui:GetPropertyChangedSignal('AbsoluteSize'):Connect(SetPosition));
+
+			-- the option window lives in the root ScreenGui, so it has to close itself
+			-- when the menu / tab that owns the button is closed or switched away
+			table.insert(FollowingConnections , Frame.AncestryChanged:Connect(function()
+				if not Frame:IsDescendantOf(NeverLose.ScreenGui) then
+					Window.Signal:SetValue(false);
+				end;
+			end));
 		else
 			NeverLose.PlayAnimate(OptionHandler , SlowyTween , {
 				BackgroundTransparency = 1
