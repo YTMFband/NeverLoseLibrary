@@ -1,4 +1,3 @@
-
 do
 	local Constant = 'L'..'P'..'H'..'_NO_VIRTUALIZE';
 	getfenv()[Constant] = getfenv()[Constant] or function(f) return f end;
@@ -65,18 +64,28 @@ local LOAD_ENV = LPH_NO_VIRTUALIZE(function()
 			local main = __get_path_c(path);
 
 			local block = BaseWorkspace;
+			local last = #main;
 
 			for i,v in next , main do
 				local item = block:FindFirstChild(v);
-				if not item then
-					local c = Instance.new('StringValue',block);
 
-					c.Name = tostring(v);
-					c.Value = content;
-				else
-					if item:IsA('StringValue') and tostring(item) == v then
+				if i == last then
+					-- last segment is the file itself
+					if not item then
+						item = Instance.new('StringValue');
 						item.Name = tostring(v);
+						item.Parent = block;
+					end;
+
+					if item:IsA('StringValue') then
 						item.Value = content;
+					end;
+				else
+					-- intermediate segments are folders
+					if not item then
+						item = Instance.new('Folder');
+						item.Name = tostring(v);
+						item.Parent = block;
 					end;
 
 					block = item;
@@ -121,11 +130,26 @@ local LOAD_ENV = LPH_NO_VIRTUALIZE(function()
 
 			for i,v in next , main do
 				local item = block:FindFirstChild(v);
-				if item and item:IsA('StringValue') then
-					item:Destroy();
+
+				if not item then
+					return;
+				end;
+
+				if i == #main then
+					if item:IsA('StringValue') then
+						item:Destroy();
+					end;
 				else
 					block = item;
 				end;
+			end;
+		end;
+
+		getgenv().delfolder = function(path)
+			local ok , folder = pcall(__get_path , path);
+
+			if ok and folder and folder:IsA('Folder') then
+				folder:Destroy();
 			end;
 		end;
 	end;
@@ -159,7 +183,15 @@ local HttpService: HttpService = cloneref(game:GetService('HttpService'));
 local LocalPlayer: Player = Players.LocalPlayer;
 local CoreGui: PlayerGui = (gethui and gethui()) or (get_hidden_gui and get_hidden_gui()) or cloneref(game:FindFirstChild('CoreGui')) or cloneref(LocalPlayer.PlayerGui);
 local Mouse: Mouse = LocalPlayer:GetMouse();
-local CurrentCamera: Camera = cloneref(workspace.CurrentCamera);
+local CurrentCamera: Camera = workspace.CurrentCamera;
+
+if not CurrentCamera then
+	-- the camera may not exist yet when the script runs very early
+	workspace:GetPropertyChangedSignal('CurrentCamera'):Wait();
+	CurrentCamera = workspace.CurrentCamera;
+end;
+
+CurrentCamera = cloneref(CurrentCamera);
 local ProtectGui = protect_gui or protectgui or (syn and syn.protect_gui) or function(s) return s; end;
 local GlobalWindow = Instance.new('ScreenGui');
 local ManualTween = TweenInfo.new(0.1);
@@ -168,9 +200,49 @@ local FastTween = TweenInfo.new(0.05);
 local VSlowTween = TweenInfo.new(0.5,Enum.EasingStyle.Quint);
 local Encryption = {};
 
-NeverLose.UserProfile = Players:GetUserThumbnailAsync(LocalPlayer.UserId , Enum.ThumbnailType.HeadShot , Enum.ThumbnailSize.Size150x150)
+do
+	-- text measurements are an engine call; the same strings get measured again and again
+	local cache , size = {} , 0;
+	local huge = Vector2.new(math.huge , math.huge);
+
+	NeverLose.GetTextSize = function(text , fontSize , font , bounds)
+		if bounds ~= huge and bounds ~= nil and (bounds.X ~= math.huge or bounds.Y ~= math.huge) then
+			return TextService:GetTextSize(text , fontSize , font , bounds);
+		end;
+
+		local key = tostring(text)..'\0'..tostring(fontSize)..'\0'..tostring(font);
+		local hit = cache[key];
+
+		if hit then
+			return hit;
+		end;
+
+		if size >= 600 then
+			table.clear(cache);
+			size = 0;
+		end;
+
+		hit = TextService:GetTextSize(text , fontSize , font , huge);
+		cache[key] = hit;
+		size += 1;
+
+		return hit;
+	end;
+end;
+
+do
+	local ok , image = pcall(Players.GetUserThumbnailAsync , Players , LocalPlayer.UserId , Enum.ThumbnailType.HeadShot , Enum.ThumbnailSize.Size150x150);
+
+	NeverLose.UserProfile = ok and image or "";
+end;
 NeverLose.RandomString = LPH_NO_VIRTUALIZE(function()
-	return string.rep(string.char(math.random(1,7)),math.random(1,4))..string.rep(string.char(math.random(1,7)),math.random(1,4))..string.rep(string.char(math.random(1,7)),math.random(1,4))..string.rep(string.char(math.random(1,7)),math.random(1,4))..string.rep(string.char(math.random(1,7)),math.random(1,4))..string.rep(string.char(math.random(1,7)),math.random(1,4))..string.rep(string.char(math.random(1,7)),math.random(1,4))..string.rep(string.char(math.random(1,7)),math.random(1,4))..string.rep(string.char(math.random(1,7)),math.random(1,4))..string.rep(string.char(math.random(1,7)),math.random(1,4))..string.rep(string.char(math.random(1,7)),math.random(1,4));
+	local parts = table.create(11);
+
+	for i = 1 , 11 do
+		parts[i] = string.rep(string.char(math.random(1,7)),math.random(1,4));
+	end;
+
+	return table.concat(parts);
 end);
 
 ProtectGui(GlobalWindow);
@@ -252,12 +324,13 @@ function NeverLose:AddQuery(ItemRoot: Frame , Name : string)
 end;
 
 function Encryption.new(data: string)
-	local bytes = {};
-	local encrypt_seed = ((#data + 3782) % 111) + 1;
+	local length = #data;
+	local bytes = table.create(length);
+	local encrypt_seed = ((length + 3782) % 111) + 1;
 
-	string.gsub(data , '.', LPH_NO_VIRTUALIZE(function(dt)
-		table.insert(bytes , tostring(dt:byte() + encrypt_seed));
-	end));
+	for i = 1 , length do
+		bytes[i] = string.byte(data , i) + encrypt_seed;
+	end;
 
 	local concatbyte = table.concat(bytes,'?');
 
@@ -818,7 +891,7 @@ end);
 
 NeverLose.IsMouseOverFrame = LPH_NO_VIRTUALIZE(function(self , Frame)
 	if not Frame then
-		return;
+		return false;
 	end;
 
 	if NeverLose.Global3DRenderMode then
@@ -831,9 +904,9 @@ NeverLose.IsMouseOverFrame = LPH_NO_VIRTUALIZE(function(self , Frame)
 
 	local AbsPos: Vector2, AbsSize: Vector2 = Frame.AbsolutePosition, Frame.AbsoluteSize;
 
-	if Mouse.X >= AbsPos.X and Mouse.X <= AbsPos.X + AbsSize.X and Mouse.Y >= AbsPos.Y and Mouse.Y <= AbsPos.Y + AbsSize.Y then
-		return true;
-	end;
+	local X , Y = Mouse.X , Mouse.Y;
+
+	return X >= AbsPos.X and X <= AbsPos.X + AbsSize.X and Y >= AbsPos.Y and Y <= AbsPos.Y + AbsSize.Y;
 end);
 
 NeverLose.CreateSignal = LPH_NO_VIRTUALIZE(function(self , DefaultValue)
@@ -978,7 +1051,11 @@ NeverLose.ProcessParams = LPH_NO_VIRTUALIZE(function(self , Params , Fixed)
 	local k = Params or {};
 
 	for i,v in next , Fixed do
-		k[i] = Params[i] or v;
+		local given = Params[i];
+
+		if given == nil or (type(v) == 'function' and type(given) ~= 'function') then
+			k[i] = v;
+		end;
 	end;
 
 	table.clear(Fixed);
@@ -987,7 +1064,7 @@ NeverLose.ProcessParams = LPH_NO_VIRTUALIZE(function(self , Params , Fixed)
 end);
 
 NeverLose.EnabledBlur = true;
-NeverLose.BlurModuleParent = workspace.CurrentCamera;
+NeverLose.BlurModuleParent = CurrentCamera;
 
 NeverLose.GetCalculatePosition = LPH_NO_VIRTUALIZE(function(planePos, planeNormal, rayOrigin, rayDirection)
 	local n = planeNormal;
@@ -1032,81 +1109,94 @@ NeverLose.CreateBlurModule = LPH_NO_VIRTUALIZE(function(self , Frame , Signal)
 
 	Part.Name = NeverLose.RandomString();
 
-	local disconnect;
+	local lastActive , lastCFrame , lastPos , lastSize , lastFov , lastViewport;
+	local FadeInfo = TweenInfo.new(0.1);
 
 	local UpdateFunction = function()
-		local IsWindowActive = Signal:GetValue();
+		local Camera = workspace.CurrentCamera or CurrentCamera;
+		local IsWindowActive = Signal:GetValue() and not NeverLose.Global3DRenderMode;
 
-		if IsWindowActive and not NeverLose.Global3DRenderMode then
+		if not IsWindowActive then
+			-- already hidden: nothing to do (previously this re-ran tweens 10x/second)
+			if lastActive == false then
+				return false;
+			end;
 
-			NeverLose.PlayAnimate(DepthOfField,TweenInfo.new(0.1),{
-				NearIntensity = 1
-			})
+			lastActive = false;
+			lastCFrame = nil;
 
-			NeverLose.PlayAnimate(Part,TweenInfo.new(0.1),{
-				Transparency = 0.97,
-				Size = Vector3.new(1, 1, 1) * 0.01;
-			})
-
-			Part.Parent = NeverLose.BlurModuleParent;
-		else
-			NeverLose.PlayAnimate(DepthOfField,TweenInfo.new(0.1),{
+			NeverLose.PlayAnimate(DepthOfField,FadeInfo,{
 				NearIntensity = 0
-			})
+			});
 
-			NeverLose.PlayAnimate(Part,TweenInfo.new(0.1),{
+			NeverLose.PlayAnimate(Part,FadeInfo,{
 				Size = Vector3.zero,
 				Transparency = 1.5,
-			})
+			});
 
 			Part.Parent = nil;
 
 			return false;
 		end;
 
-		if IsWindowActive then
-			local corner0 = Frame.AbsolutePosition;
-			local corner1 = corner0 + Frame.AbsoluteSize;
+		if lastActive ~= true then
+			lastActive = true;
 
-			local ray0 = CurrentCamera.ScreenPointToRay(CurrentCamera,corner0.X, corner0.Y, 1);
-			local ray1 = CurrentCamera.ScreenPointToRay(CurrentCamera,corner1.X, corner1.Y, 1);
+			NeverLose.PlayAnimate(DepthOfField,FadeInfo,{
+				NearIntensity = 1
+			});
 
-			local planeOrigin = CurrentCamera.CFrame.Position + CurrentCamera.CFrame.LookVector * (0.05 - CurrentCamera.NearPlaneZ);
+			NeverLose.PlayAnimate(Part,FadeInfo,{
+				Transparency = 0.97,
+				Size = Vector3.new(1, 1, 1) * 0.01;
+			});
 
-			local planeNormal = CurrentCamera.CFrame.LookVector;
-
-			local pos0 = NeverLose.GetCalculatePosition(planeOrigin, planeNormal, ray0.Origin, ray0.Direction);
-			local pos1 = NeverLose.GetCalculatePosition(planeOrigin, planeNormal, ray1.Origin, ray1.Direction);
-
-			pos0 = CurrentCamera.CFrame:PointToObjectSpace(pos0);
-			pos1 = CurrentCamera.CFrame:PointToObjectSpace(pos1);
-
-			local size   = pos1 - pos0;
-			local center = (pos0 + pos1) / 2;
-
-			BlockMesh.Offset = center
-			BlockMesh.Scale  = size / 0.0101;
-			Part.CFrame = CurrentCamera.CFrame;
+			Part.Parent = NeverLose.BlurModuleParent;
 		end;
+
+		local cframe , pos , size , fov , viewport = Camera.CFrame , Frame.AbsolutePosition , Frame.AbsoluteSize , Camera.FieldOfView , Camera.ViewportSize;
+
+		-- camera and window did not move: skip the whole projection math
+		if cframe == lastCFrame and pos == lastPos and size == lastSize and fov == lastFov and viewport == lastViewport then
+			return;
+		end;
+
+		lastCFrame , lastPos , lastSize , lastFov , lastViewport = cframe , pos , size , fov , viewport;
+
+		local corner0 = pos;
+		local corner1 = corner0 + size;
+
+		local ray0 = Camera.ScreenPointToRay(Camera,corner0.X, corner0.Y, 1);
+		local ray1 = Camera.ScreenPointToRay(Camera,corner1.X, corner1.Y, 1);
+
+		local planeOrigin = cframe.Position + cframe.LookVector * (0.05 - Camera.NearPlaneZ);
+		local planeNormal = cframe.LookVector;
+
+		local pos0 = NeverLose.GetCalculatePosition(planeOrigin, planeNormal, ray0.Origin, ray0.Direction);
+		local pos1 = NeverLose.GetCalculatePosition(planeOrigin, planeNormal, ray1.Origin, ray1.Direction);
+
+		pos0 = cframe:PointToObjectSpace(pos0);
+		pos1 = cframe:PointToObjectSpace(pos1);
+
+		BlockMesh.Offset = (pos0 + pos1) / 2;
+		BlockMesh.Scale  = (pos1 - pos0) / 0.0101;
+		Part.CFrame = cframe;
 	end;
 
-	local rbxsignal = NeverLose:AddSignal(CurrentCamera:GetPropertyChangedSignal('CFrame'):Connect(UpdateFunction))
-	local loopThread = NeverLose:AddSignal(UserInputService.InputChanged:Connect(function(Input)
-		if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.MouseMovement or Input.UserInputType == Enum.UserInputType.Touch then
-			pcall(UpdateFunction);
-		end;
+	-- single per-frame connection that early-outs when nothing changed
+	local rbxsignal = NeverLose:AddSignal(RunService.RenderStepped:Connect(function()
+		pcall(UpdateFunction);
 	end));
 
-	local THREAD = task.spawn(function()
-		while true do task.wait(0.1)
-			pcall(UpdateFunction);
+	local destroyed = false;
+	local disconnect = function()
+		if destroyed then
+			return;
 		end;
-	end);
 
-	disconnect = function()
+		destroyed = true;
+
 		rbxsignal:Disconnect();
-		loopThread:Disconnect();
-		task.cancel(THREAD);
 		Part:Destroy();
 		DepthOfField:Destroy();
 	end;
@@ -1151,8 +1241,9 @@ function NeverLose:CreateShadow(parent , RollingEffect)
 	UIShadowSafe45.Transparency = 1
 	UIShadowSafe45.Parent = parent
 
-	local RollingEffectThread;
+	local RollingTweens = {};
 	local r1,r2,r3,r4;
+	local RollInfo = TweenInfo.new(0.45 , Enum.EasingStyle.Linear , Enum.EasingDirection.In , -1);
 
 	if RollingEffect then
 		r1 = NeverLose:RollingEffect(UIShadowSafe85);
@@ -1162,10 +1253,11 @@ function NeverLose:CreateShadow(parent , RollingEffect)
 	end;
 
 	Shadow.Render = LPH_NO_VIRTUALIZE(function(self , value)
-		if RollingEffectThread then
-			task.cancel(RollingEffectThread);
-			RollingEffectThread = nil;
+		for i,tween in next , RollingTweens do
+			tween:Cancel();
 		end;
+
+		table.clear(RollingTweens);
 
 		if value then
 			NeverLose.PlayAnimate(UIShadowSafe85 , SlowyTween , {
@@ -1185,26 +1277,17 @@ function NeverLose:CreateShadow(parent , RollingEffect)
 			})
 
 			if RollingEffect then
-				RollingEffectThread = task.spawn(function()
-					local level = 20;
-					while true do task.wait(0.025)
-						NeverLose.PlayAnimate(r1 , SlowyTween , {
-							Rotation = r1.Rotation + level
-						});
+				for i,gradient in next , {r1 , r2 , r3 , r4} do
+					gradient.Rotation = 0;
 
-						NeverLose.PlayAnimate(r2 , SlowyTween , {
-							Rotation = r2.Rotation + level
-						});
+					local tween = TweenService:Create(gradient , RollInfo , {
+						Rotation = 360
+					});
 
-						NeverLose.PlayAnimate(r3 , SlowyTween , {
-							Rotation = r3.Rotation + level
-						});
+					tween:Play();
 
-						NeverLose.PlayAnimate(r4 , SlowyTween , {
-							Rotation = r4.Rotation + level
-						});
-					end;
-				end);
+					table.insert(RollingTweens , tween);
+				end;
 			end;
 		else
 			NeverLose.PlayAnimate(UIShadowSafe85 , SlowyTween , {
@@ -1287,7 +1370,7 @@ function NeverLose:CreateOptionWindow(Frame: Frame , Zindex)
 		end
 	end)));
 
-	local FollowingThread;
+	local FollowingConnections = {};
 	local SetPosition = LPH_NO_VIRTUALIZE(function()
 		if NeverLose:MoreThanHalfY(Frame.AbsolutePosition.Y + 65) then
 			OptionHandler.AnchorPoint = Vector2.new(0,1)
@@ -1299,10 +1382,11 @@ function NeverLose:CreateOptionWindow(Frame: Frame , Zindex)
 	end);
 
 	Window.SetRender = LPH_NO_VIRTUALIZE(function(value)
-		if FollowingThread then
-			task.cancel(FollowingThread);
-			FollowingThread = nil;
+		for i,connection in next , FollowingConnections do
+			connection:Disconnect();
 		end;
+
+		table.clear(FollowingConnections);
 
 		if value then
 			SetPosition();
@@ -1323,11 +1407,8 @@ function NeverLose:CreateOptionWindow(Frame: Frame , Zindex)
 				OptionHandler.Parent = NeverLose.ScreenGui;
 			end;
 
-			FollowingThread = task.spawn(function()
-				while true do task.wait()
-					SetPosition();
-				end
-			end)
+			table.insert(FollowingConnections , Frame:GetPropertyChangedSignal('AbsolutePosition'):Connect(SetPosition));
+			table.insert(FollowingConnections , NeverLose.ScreenGui:GetPropertyChangedSignal('AbsoluteSize'):Connect(SetPosition));
 		else
 			NeverLose.PlayAnimate(OptionHandler , SlowyTween , {
 				BackgroundTransparency = 1
@@ -1607,6 +1688,13 @@ function NeverLose:CreateColorPicker(HandleFrame: Frame)
 
 	ColorPickerLib.IsHold = false;
 
+	-- releasing the mouse/finger anywhere must end the drag (otherwise the loops below spin forever)
+	NeverLose:AddSignal(UserInputService.InputEnded:Connect(function(Input)
+		if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
+			ColorPickerLib.IsHold = false;
+		end;
+	end));
+
 	NeverLose:AddSignal(ColorPickerHandler.InputBegan:Connect(function(Input)
 		if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
 			ColorPickerLib.IsHold = true;
@@ -1625,14 +1713,16 @@ function NeverLose:CreateColorPicker(HandleFrame: Frame)
 			ColorPickerLib.IsHold = true;
 			NeverLose.IsColorPickerOn = true;
 
-			while (UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) or ColorPickerLib.IsHold) do task.wait()
+			while ColorPickerLib.IsHold do task.wait()
 				local ColorY = ColorMap.AbsolutePosition.X
 				local ColorYM = ColorY + ColorMap.AbsoluteSize.X;
 				local Value = math.clamp(Mouse.X, ColorY, ColorYM)
 				local Code = ((Value - ColorY) / (ColorYM - ColorY));
 
-				ColorPickerLib.H = Code;
-				ColorPickerLib:Update();
+				if Code ~= ColorPickerLib.H then
+					ColorPickerLib.H = Code;
+					ColorPickerLib:Update();
+				end;
 			end;
 		end;
 	end)));
@@ -1641,16 +1731,21 @@ function NeverLose:CreateColorPicker(HandleFrame: Frame)
 		if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
 			ColorPickerLib.IsHold = true;
 
-			while (UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) or ColorPickerLib.IsHold) do task.wait();
+			while ColorPickerLib.IsHold do task.wait();
 				local PosX = SaViMap.AbsolutePosition.X;
 				local ScaleX = PosX + SaViMap.AbsoluteSize.X;
 				local Value, PosY = math.clamp(Mouse.X, PosX, ScaleX), SaViMap.AbsolutePosition.Y;
 				local ScaleY = PosY + SaViMap.AbsoluteSize.Y;
 				local Vals = math.clamp(Mouse.Y, PosY, ScaleY);
 
-				ColorPickerLib.S = (Value - PosX) / (ScaleX - PosX);
-				ColorPickerLib.V = (1 - ((Vals - PosY) / (ScaleY - PosY)));
-				ColorPickerLib:Update();
+				local NewS = (Value - PosX) / (ScaleX - PosX);
+				local NewV = (1 - ((Vals - PosY) / (ScaleY - PosY)));
+
+				if NewS ~= ColorPickerLib.S or NewV ~= ColorPickerLib.V then
+					ColorPickerLib.S = NewS;
+					ColorPickerLib.V = NewV;
+					ColorPickerLib:Update();
+				end;
 			end
 		end
 	end)));
@@ -1862,7 +1957,7 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 			return (Config.Default - Config.Min) / (Config.Max - Config.Min);
 		end);
 
-		local FullNumSize = TextService:GetTextSize(string.rep("0",(Config.Rounding + #tostring(Config.Max))+1)..tostring(Config.Type),10,Enum.Font.GothamMedium,Vector2.new(math.huge,math.huge));
+		local FullNumSize = NeverLose.GetTextSize(string.rep("0",(Config.Rounding + #tostring(Config.Max))+1)..tostring(Config.Type),10,Enum.Font.GothamMedium,Vector2.new(math.huge,math.huge));
 
 		SliderLib.MaximumSize = FullNumSize.X;
 
@@ -1870,7 +1965,7 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 			local nszie = 0;
 
 			for i,ns in next , Config.Nums do
-				local size = TextService:GetTextSize(string.rep("m",string.len(tostring(ns))),10,Enum.Font.GothamMedium,Vector2.new(math.huge,math.huge));
+				local size = NeverLose.GetTextSize(string.rep("m",string.len(tostring(ns))),10,Enum.Font.GothamMedium,Vector2.new(math.huge,math.huge));
 
 				if nszie < size.X then
 					nszie = size.X;
@@ -2127,7 +2222,7 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 				end
 			end))
 
-			UserInputService.InputChanged:Connect(LPH_NO_VIRTUALIZE(function(Input)
+			NeverLose:AddSignal(UserInputService.InputChanged:Connect(LPH_NO_VIRTUALIZE(function(Input)
 				if IsHold then
 					if (Input.UserInputType == Enum.UserInputType.MouseMovement or Input.UserInputType == Enum.UserInputType.Touch)  then
 						if UserInputService.TouchEnabled then
@@ -2141,7 +2236,7 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 						end;
 					end;
 				end;
-			end));
+			end)));
 		end;
 
 		function SliderLib:GetValue()
@@ -2479,7 +2574,7 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 		end);
 
 		function KeybindLib:Update()
-			local size = TextService:GetTextSize(ValueLabel.Text,ValueLabel.TextSize,ValueLabel.Font,Vector2.new(math.huge,math.huge));
+			local size = NeverLose.GetTextSize(ValueLabel.Text,ValueLabel.TextSize,ValueLabel.Font,Vector2.new(math.huge,math.huge));
 
 			NeverLose.PlayAnimate(Keybind , SlowyTween , {
 				Size = UDim2.new(0, size.X + 7, 0, 18)
@@ -2999,7 +3094,7 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 
 				UICorner.CornerRadius = UDim.new(0, 10)
 				UICorner.Parent = ItemFrame
-				local sizetext = TextService:GetTextSize(ItemLabel.Text , ItemLabel.TextSize,ItemLabel.Font,Vector2.new(math.huge,math.huge));
+				local sizetext = NeverLose.GetTextSize(ItemLabel.Text , ItemLabel.TextSize,ItemLabel.Font,Vector2.new(math.huge,math.huge));
 
 				DropdownLib.ExtentSize = math.max(DropdownLib.ExtentSize , sizetext.X);
 
@@ -3303,8 +3398,8 @@ function NeverLose:CreateToolTips(Container: Frame , Name: string , Content: str
 	local ToolTip = {};
 
 	ToolTip.Update = LPH_NO_VIRTUALIZE(function()
-		local SizeName = TextService:GetTextSize(TooltipName.Text , TooltipName.TextSize , TooltipName.Font , Vector2.new(math.huge,math.huge));
-		local SizeContent = TextService:GetTextSize(TooltipContent.Text , TooltipContent.TextSize , TooltipContent.Font , Vector2.new(math.huge,math.huge));
+		local SizeName = NeverLose.GetTextSize(TooltipName.Text , TooltipName.TextSize , TooltipName.Font , Vector2.new(math.huge,math.huge));
+		local SizeContent = NeverLose.GetTextSize(TooltipContent.Text , TooltipContent.TextSize , TooltipContent.Font , Vector2.new(math.huge,math.huge));
 
 		local MaxX = math.max(SizeName.X , SizeContent.X) + 65;
 		local MaxY = SizeName.Y + SizeContent.Y + 30;
@@ -3472,7 +3567,7 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 		UICorner.Parent = BasedFrame
 
 		local UpdateWarp = LPH_NO_VIRTUALIZE(function()
-			local size = TextService:GetTextSize(BasedLabel.Text , BasedLabel.TextSize , BasedLabel.Font , Vector2.new(math.huge,math.huge));
+			local size = NeverLose.GetTextSize(BasedLabel.Text , BasedLabel.TextSize , BasedLabel.Font , Vector2.new(math.huge,math.huge));
 			NeverLose.PlayAnimate(BasedFrame , SlowyTween , {
 				Size = UDim2.new(1, 0, 0, size.Y + 13);
 			})
@@ -5392,7 +5487,7 @@ function NeverLose:CreateWindow(Config)
 		ConfigLib.SelectedConfig = "Default";
 
 		local UpdateSize = LPH_NO_VIRTUALIZE(function()
-			local size = TextService:GetTextSize(ConfigName.Text , ConfigName.TextSize,ConfigName.Font,Vector2.new(math.huge,math.huge));
+			local size = NeverLose.GetTextSize(ConfigName.Text , ConfigName.TextSize,ConfigName.Font,Vector2.new(math.huge,math.huge));
 
 			NeverLose.PlayAnimate(ConfigFrame,SlowyTween , {
 				Size = UDim2.fromOffset(size.X + 75, 30)
@@ -6067,7 +6162,7 @@ function NeverLose:CreateWindow(Config)
 			Icon.TextWrapped = true
 
 			InnerBlock.Update = LPH_NO_VIRTUALIZE(function(value)
-				local size = TextService:GetTextSize(Content.Text , Content.TextSize,Content.Font,Vector2.new(math.huge,math.huge))
+				local size = NeverLose.GetTextSize(Content.Text , Content.TextSize,Content.Font,Vector2.new(math.huge,math.huge))
 
 				if InnerBlock.Visible then
 					NeverLose.PlayAnimate(Frame,VSlowTween,{
@@ -6264,8 +6359,8 @@ function NeverLose:CreateNotification()
 		NotifyContent.TextTransparency = 0.650
 		NotifyContent.TextXAlignment = Enum.TextXAlignment.Left
 
-		local Size1 = TextService:GetTextSize(NotifyName.Text,NotifyName.TextSize,NotifyName.Font,Vector2.new(math.huge,math.huge));
-		local Size2 = TextService:GetTextSize(NotifyContent.Text,NotifyContent.TextSize,NotifyContent.Font,Vector2.new(math.huge,math.huge));
+		local Size1 = NeverLose.GetTextSize(NotifyName.Text,NotifyName.TextSize,NotifyName.Font,Vector2.new(math.huge,math.huge));
+		local Size2 = NeverLose.GetTextSize(NotifyContent.Text,NotifyContent.TextSize,NotifyContent.Font,Vector2.new(math.huge,math.huge));
 
 		local MainSize = math.max(Size1.X , Size2.X);
 
@@ -6426,7 +6521,7 @@ function NeverLose:CreateLogger()
 		Icon.TextTransparency = 1--0.250
 		Icon.TextWrapped = true
 
-		local size = TextService:GetTextSize(LogContent.Text,LogContent.TextSize,LogContent.Font,Vector2.new(math.huge,math.huge));
+		local size = NeverLose.GetTextSize(LogContent.Text,LogContent.TextSize,LogContent.Font,Vector2.new(math.huge,math.huge));
 
 		NeverLose.PlayAnimate(LogFrame , SlowyTween , {
 			Size = UDim2.new(0, size.X + 35, 0, 20),
@@ -6611,7 +6706,7 @@ function NeverLose:CreateIndicator()
 		Content.TextXAlignment = Enum.TextXAlignment.Left
 
 		Indicator.Update = LPH_NO_VIRTUALIZE(function()
-			local text = TextService:GetTextSize(Content.Text,Content.TextSize , Content.Font , Vector2.new(math.huge,math.huge));
+			local text = NeverLose.GetTextSize(Content.Text,Content.TextSize , Content.Font , Vector2.new(math.huge,math.huge));
 
 			NeverLose.PlayAnimate(IndicatorItem , SlowyTween , {
 				Size = UDim2.new(0, text.X + 60, 0, 40);
@@ -6698,11 +6793,15 @@ function NeverLose:Unload()
 		return;	
 	end;
 
-	NeverLose.ScreenGui:Destroy();
-
 	for i,v in next , NeverLose.GlobalSignals do
 		pcall(v.Disconnect,v)
 	end;
+
+	table.clear(NeverLose.GlobalSignals);
+	table.clear(NeverLose.NameRegisitry);
+	table.clear(NeverLose.RegisiteryColor);
+
+	NeverLose.ScreenGui:Destroy();
 end;
 
 return NeverLose;
