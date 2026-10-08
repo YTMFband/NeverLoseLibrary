@@ -2508,11 +2508,23 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 		Config = NeverLose:ProcessParams(Config,{
 			Default = nil,
 			Blacklist = {},
-			Callback = EmptyFunction,
+			Callback = EmptyFunction,      -- (keyName) когда сменили клавишу
+			StateCallback = EmptyFunction, -- (active) когда бинд включился/выключился
+			Mode = 'Hold',                 -- 'Hold' | 'Toggle' | 'Always'
+			Name = nil,                    -- имя в keybind list (по умолчанию - название строки)
+			ShowInList = true,
 			Flag = nil
 		});
 
+		local Modes = { Hold = true , Toggle = true , Always = true };
+
+		if not Modes[Config.Mode] then
+			Config.Mode = 'Hold';
+		end;
+
 		local KeybindLib = {};
+		local OriginalKey = Config.Default;
+		local OriginalMode = Config.Mode;
 
 		local Keybind = Instance.new("Frame")
 		local UICorner = Instance.new("UICorner")
@@ -2552,6 +2564,85 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 		ValueLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 		ValueLabel.TextSize = 10.000
 		ValueLabel.TextTransparency = 0.500
+
+		-------------------------------------------------------------- state
+		local function resolveName()
+			if Config.Name then
+				return Config.Name;
+			end;
+
+			local parent = Handler.Parent;
+
+			if parent then
+				for _ , v in next , parent:GetChildren() do
+					if v:IsA('TextLabel') and v.Text ~= '' then
+						return v.Text;
+					end;
+				end;
+			end;
+
+			return 'Keybind';
+		end;
+
+		KeybindLib.Name = resolveName();
+		KeybindLib.Mode = Config.Mode;
+		KeybindLib.Active = (Config.Mode == 'Always');
+		KeybindLib.ShowInList = Config.ShowInList;
+		KeybindLib.Changed = NeverLose:CreateSignal(0);
+
+		local function fireChanged()
+			KeybindLib.Changed:SetValue(KeybindLib.Changed:GetValue() + 1);
+		end;
+
+		local function keyName()
+			local k = Config.Default;
+
+			if typeof(k) == 'EnumItem' then
+				return k.Name;
+			end;
+
+			return k;
+		end;
+
+		local function setActive(v)
+			v = v and true or false;
+
+			if KeybindLib.Active == v then
+				return;
+			end;
+
+			KeybindLib.Active = v;
+			fireChanged();
+			task.spawn(Config.StateCallback , v);
+		end;
+
+		function KeybindLib:GetState()
+			return KeybindLib.Active;
+		end;
+
+		function KeybindLib:GetMode()
+			return KeybindLib.Mode;
+		end;
+
+		function KeybindLib:SetName(n)
+			KeybindLib.Name = n;
+			fireChanged();
+		end;
+
+		function KeybindLib:SetMode(m)
+			if not Modes[m] then
+				return;
+			end;
+
+			KeybindLib.Mode = m;
+			fireChanged();
+
+			if m == 'Always' then
+				setActive(true);
+			else
+				setActive(false);
+			end;
+		end;
 
 		KeybindLib.SetRender = LPH_NO_VIRTUALIZE(function(value)
 			if value then
@@ -2598,11 +2689,214 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 		KeybindLib.SetRender(Signal:GetValue());
 		Signal:Connect(KeybindLib.SetRender);
 
+		-------------------------------------------------------------- key press -> state
 		local IsBinding = false;
-		NeverLose:CreateInput(Keybind , function()
+
+		local function matches(input)
+			local key = keyName();
+
+			if not key or key == 'None' or key == '' then
+				return false;
+			end;
+
+			if key == 'M1B' then
+				return input.UserInputType == Enum.UserInputType.MouseButton1;
+			elseif key == 'M2B' then
+				return input.UserInputType == Enum.UserInputType.MouseButton2;
+			end;
+
+			return input.KeyCode ~= Enum.KeyCode.Unknown and input.KeyCode.Name == key;
+		end;
+
+		NeverLose:AddSignal(UserInputService.InputBegan:Connect(function(input , gp)
+			if IsBinding or gp or UserInputService:GetFocusedTextBox() then
+				return;
+			end;
+
+			if KeybindLib.Mode == 'Always' or not matches(input) then
+				return;
+			end;
+
+			if KeybindLib.Mode == 'Toggle' then
+				setActive(not KeybindLib.Active);
+			else
+				setActive(true);
+			end;
+		end));
+
+		NeverLose:AddSignal(UserInputService.InputEnded:Connect(function(input)
+			if KeybindLib.Mode == 'Hold' and KeybindLib.Active and matches(input) then
+				setActive(false);
+			end;
+		end));
+
+		-------------------------------------------------------------- right click menu (mode / reset)
+		local Menu = nil;
+		local MenuConn = nil;
+		local ClosedAt = 0;
+
+		local function closeMenu(byOutside)
+			if MenuConn then
+				MenuConn:Disconnect();
+				MenuConn = nil;
+			end;
+
+			if Menu then
+				Menu:Destroy();
+				Menu = nil;
+			end;
+
+			if byOutside then
+				ClosedAt = os.clock();
+			end;
+		end;
+
+		local function openMenu()
+			if Menu then
+				closeMenu();
+				return;
+			end;
+
+			if os.clock() - ClosedAt < 0.25 then
+				return;
+			end;
+
+			local Width , Row = 96 , 22;
+			local Items = { 'Hold' , 'Toggle' , 'Always' , 'Reset' };
+			local Buttons = {};
+
+			Menu = Instance.new('Frame');
+			Menu.Name = NeverLose.RandomString();
+			Menu.Parent = NeverLose.ScreenGui;
+			Menu.BackgroundColor3 = NeverLose.MainColor;
+			Menu.BackgroundTransparency = 0.05;
+			Menu.BorderSizePixel = 0;
+			Menu.Size = UDim2.new(0 , Width , 0 , #Items * Row + 10);
+			Menu.ZIndex = 170;
+
+			local abs , size = Keybind.AbsolutePosition , Keybind.AbsoluteSize;
+			local view = CurrentCamera.ViewportSize;
+			local x = math.clamp(abs.X + size.X - Width , 4 , math.max(4 , view.X - Width - 4));
+			local y = math.clamp(abs.Y + size.Y + 4 , 4 , math.max(4 , view.Y - (#Items * Row + 14)));
+
+			Menu.Position = UDim2.fromOffset(x , y);
+
+			local MenuCorner = Instance.new('UICorner');
+			MenuCorner.CornerRadius = UDim.new(0 , 8);
+			MenuCorner.Parent = Menu;
+
+			local MenuStroke = Instance.new('UIStroke');
+			MenuStroke.Color = Color3.fromRGB(45 , 48 , 58);
+			MenuStroke.Transparency = 0.4;
+			MenuStroke.Parent = Menu;
+
+			local function paint()
+				for name , b in next , Buttons do
+					if name == 'Reset' then
+						b.TextColor3 = Color3.fromRGB(240 , 90 , 90);
+						b.TextTransparency = 0.15;
+					else
+						local on = (KeybindLib.Mode == name);
+
+						b.TextColor3 = on and NeverLose.AccentColor or Color3.fromRGB(255 , 255 , 255);
+						b.TextTransparency = on and 0 or 0.35;
+					end;
+				end;
+			end;
+
+			for i , name in next , Items do
+				local B = Instance.new('TextButton');
+
+				B.Name = NeverLose.RandomString();
+				B.Parent = Menu;
+				B.AutoButtonColor = false;
+				B.BackgroundColor3 = Color3.fromRGB(25 , 27 , 33);
+				B.BackgroundTransparency = 1;
+				B.BorderSizePixel = 0;
+				B.Position = UDim2.new(0 , 5 , 0 , 5 + (i - 1) * Row);
+				B.Size = UDim2.new(1 , -10 , 0 , Row - 2);
+				B.ZIndex = 171;
+				B.Font = Enum.Font.GothamMedium;
+				B.Text = name;
+				B.TextSize = 12;
+
+				local BC = Instance.new('UICorner');
+				BC.CornerRadius = UDim.new(0 , 5);
+				BC.Parent = B;
+
+				Buttons[name] = B;
+
+				B.MouseEnter:Connect(function()
+					NeverLose.PlayAnimate(B , SlowyTween , { BackgroundTransparency = 0.5 });
+				end);
+
+				B.MouseLeave:Connect(function()
+					NeverLose.PlayAnimate(B , SlowyTween , { BackgroundTransparency = 1 });
+				end);
+
+				B.Activated:Connect(function()
+					if name == 'Reset' then
+						KeybindLib:Reset();
+						closeMenu();
+					else
+						KeybindLib:SetMode(name);
+						paint();
+					end;
+				end);
+			end;
+
+			-- разделитель перед Reset
+			local Divider = Instance.new('Frame');
+			Divider.Name = NeverLose.RandomString();
+			Divider.Parent = Menu;
+			Divider.BackgroundColor3 = Color3.fromRGB(45 , 48 , 58);
+			Divider.BackgroundTransparency = 0.4;
+			Divider.BorderSizePixel = 0;
+			Divider.Position = UDim2.new(0 , 8 , 0 , 5 + 3 * Row - 1);
+			Divider.Size = UDim2.new(1 , -16 , 0 , 1);
+			Divider.ZIndex = 171;
+
+			paint();
+
+			MenuConn = UserInputService.InputBegan:Connect(function(input)
+				local t = input.UserInputType;
+
+				if t == Enum.UserInputType.MouseButton1 or t == Enum.UserInputType.MouseButton2 or t == Enum.UserInputType.Touch then
+					if not Menu then
+						return;
+					end;
+
+					local a , s = Menu.AbsolutePosition , Menu.AbsoluteSize;
+					local p = input.Position;
+
+					if p.X < a.X or p.X > a.X + s.X or p.Y < a.Y or p.Y > a.Y + s.Y then
+						closeMenu(true);
+					end;
+				end;
+			end);
+		end;
+
+		Signal:Connect(function(value)
+			if not value then
+				closeMenu();
+			end;
+		end);
+
+		-------------------------------------------------------------- bind button
+		local LongPressed = false;
+		local PressId = 0;
+
+		local BindButton = NeverLose:CreateInput(Keybind , function()
+			if LongPressed then
+				LongPressed = false;
+				return;
+			end;
+
 			if IsBinding then
 				return;
 			end;
+
+			closeMenu();
 
 			IsBinding = true;
 
@@ -2615,7 +2909,9 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 			while not Selected do
 				local Key = UserInputService.InputBegan:Wait();
 
-				if Key.KeyCode ~= Enum.KeyCode.Unknown and not IsBlacklist(Key.KeyCode) and not IsBlacklist(Key.KeyCode.Name) then
+				if Key.KeyCode == Enum.KeyCode.Backspace then
+					Selected = 'None'; -- Backspace = очистить бинд
+				elseif Key.KeyCode ~= Enum.KeyCode.Unknown and not IsBlacklist(Key.KeyCode) and not IsBlacklist(Key.KeyCode.Name) then
 					Selected = Key.KeyCode;
 				else
 					if Key.UserInputType == Enum.UserInputType.MouseButton1 and not IsBlacklist(Enum.UserInputType.MouseButton1) and not IsBlacklist("M1B") then
@@ -2636,22 +2932,88 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 
 			KeybindLib:Update();
 
+			if KeybindLib.Mode ~= 'Always' then
+				setActive(false);
+			end;
+
+			fireChanged();
+
 			Config.Callback(KeyName)
 		end)
 
+		-- правая кнопка мыши
+		NeverLose:AddSignal(BindButton.MouseButton2Click:Connect(function()
+			openMenu();
+		end));
+
+		-- долгое нажатие на телефоне
+		NeverLose:AddSignal(BindButton.InputBegan:Connect(function(input)
+			if input.UserInputType == Enum.UserInputType.Touch then
+				PressId += 1;
+
+				local id = PressId;
+
+				task.delay(0.45 , function()
+					if id == PressId and not IsBinding then
+						LongPressed = true;
+						openMenu();
+					end;
+				end);
+			end;
+		end));
+
+		NeverLose:AddSignal(BindButton.InputEnded:Connect(function(input)
+			if input.UserInputType == Enum.UserInputType.Touch then
+				PressId += 1;
+			end;
+		end));
+
+		-------------------------------------------------------------- API
 		function KeybindLib:GetValue()
 			return Config.Default;
 		end;
 
 		function KeybindLib:SetValue(v)
 			Config.Default = v;
-			ValueLabel.Text = NeverLose:KeyCodeToStr(v);
+			ValueLabel.Text = NeverLose:KeyCodeToStr(v or "None");
 			KeybindLib:Update();
+
+			if KeybindLib.Mode ~= 'Always' then
+				setActive(false);
+			end;
+
+			fireChanged();
 			Config.Callback(Config.Default);
+		end;
+
+		function KeybindLib:Reset()
+			Config.Default = OriginalKey;
+			ValueLabel.Text = NeverLose:KeyCodeToStr(OriginalKey or "None");
+			KeybindLib:Update();
+			KeybindLib:SetMode(OriginalMode);
+			Config.Callback(keyName() or 'None');
 		end;
 
 		if Config.Flag then
 			NeverLose.Flags[Config.Flag] = KeybindLib;
+
+			-- режим сохраняется в конфиг отдельным флагом
+			NeverLose.Flags[Config.Flag .. '_mode'] = {
+				GetValue = function()
+					return KeybindLib.Mode;
+				end,
+				SetValue = function(_ , v)
+					KeybindLib:SetMode(v);
+				end,
+			};
+		end;
+
+		-- авто-регистрация в keybind list
+		NeverLose.KeybindRegistry = NeverLose.KeybindRegistry or {};
+		table.insert(NeverLose.KeybindRegistry , KeybindLib);
+
+		if NeverLose.KeybindList and KeybindLib.ShowInList then
+			NeverLose.KeybindList:Add({ Source = KeybindLib });
 		end;
 
 		return KeybindLib;
@@ -3946,7 +4308,7 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 	function idx:AddPlayerList(Config)
 		Config = NeverLose:ProcessParams(Config , {
 			Name = 'Playerlist',
-			Height = 320,
+			Height = 260,
 			Flag = nil,
 			Callback = EmptyFunction,       -- (player, priority)
 			SelectCallback = EmptyFunction, -- (player or nil)
@@ -5548,6 +5910,41 @@ function NeverLose:CreateWindow(Config)
 			end)))
 		end;
 
+		-- полноширинные секции (Position = 'full')
+		local TopFrame = Instance.new("Frame")
+		local TopLayout = Instance.new("UIListLayout")
+		local IsSingle = (Config.Type == "Single");
+
+		TopFrame.Name = NeverLose.RandomString();
+		TopFrame.Parent = TabFrame
+		TopFrame.BackgroundTransparency = 1.000
+		TopFrame.BorderSizePixel = 0
+		TopFrame.Position = UDim2.new(0, 0, 0, 0)
+		TopFrame.Size = UDim2.new(1, 0, 0, 0)
+		TopFrame.ZIndex = 9
+
+		TopLayout.Parent = TopFrame
+		TopLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+		TopLayout.SortOrder = Enum.SortOrder.LayoutOrder
+		TopLayout.Padding = UDim.new(0, 5)
+
+		NeverLose:AddSignal(TopLayout:GetPropertyChangedSignal('AbsoluteContentSize'):Connect(LPH_NO_VIRTUALIZE(function()
+			local h = TopLayout.AbsoluteContentSize.Y;
+			local off = (h > 1) and (h + 5) or 0;
+
+			TopFrame.Size = UDim2.new(1, 0, 0, math.max(h , 0));
+
+			if IsSingle then
+				LeftScroll.Position = UDim2.new(0.5, 0, 0.5, off / 2);
+				LeftScroll.Size = UDim2.new(1, 0, 1, -5 - off);
+			else
+				LeftScroll.Position = UDim2.new(0.25, 0, 0.5, off / 2);
+				LeftScroll.Size = UDim2.new(0.5, 0, 1, -5 - off);
+				RightScroll.Position = UDim2.new(0.75, 0, 0.5, off / 2);
+				RightScroll.Size = UDim2.new(0.5, 0, 1, -5 - off);
+			end;
+		end)))
+
 		NeverLose:AddSignal(TabIcon:GetPropertyChangedSignal('TextTransparency'):Connect(LPH_NO_VIRTUALIZE(function()
 			if TabIcon.TextTransparency > 0.4 then
 				UIListLayout.Parent = nil;
@@ -5675,7 +6072,8 @@ function NeverLose:CreateWindow(Config)
 			local UIListLayout = Instance.new("UIListLayout")
 
 			SectionFrame.Name = NeverLose.RandomString();
-			SectionFrame.Parent = (string.lower(Config.Position) == 'left' and LeftScroll) or RightScroll
+			local SectionPos = string.lower(Config.Position);
+			SectionFrame.Parent = (SectionPos == 'full' and TopFrame) or (SectionPos == 'left' and LeftScroll) or RightScroll
 			SectionFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 			SectionFrame.BackgroundTransparency = 1.000
 			SectionFrame.BorderColor3 = Color3.fromRGB(0, 0, 0)
@@ -7508,22 +7906,31 @@ function NeverLose:CreateKeybindList(Config)
 		return NeverLose:KeyCodeToStr(key);
 	end;
 
-	local function refresh(entry)
-		local key = resolveKey(entry);
-		local show = entry.Active or Config.ShowInactive;
+	local function snapshot(entry)
+		if entry.Source then
+			return normalizeKey(entry.Source:GetValue()) , entry.Source.Mode , entry.Source:GetState() , entry.Source.Name;
+		end;
 
-		entry.KeyLabel.Text = string.format('[%s] %s' , keyText(key) , entry.Mode);
-		entry.Row.Visible = show;
+		return resolveKey(entry) , entry.Mode , entry.Active , entry.Name;
+	end;
+
+	local function refresh(entry)
+		local key , mode , active , name = snapshot(entry);
+		local hasKey = key ~= nil and key ~= 'None' and key ~= '';
+
+		entry.NameLabel.Text = name or 'Keybind';
+		entry.KeyLabel.Text = string.format('[%s] %s' , keyText(key) , mode);
+		entry.Row.Visible = hasKey and (active or Config.ShowInactive);
 
 		NeverLose.PlayAnimate(entry.NameLabel , SlowyTween , {
-			TextTransparency = entry.Active and 0.1 or 0.6,
+			TextTransparency = active and 0.1 or 0.6,
 		});
 
 		NeverLose.PlayAnimate(entry.KeyLabel , SlowyTween , {
-			TextTransparency = entry.Active and 0.3 or 0.7,
+			TextTransparency = active and 0.3 or 0.7,
 		});
 
-		entry.NameLabel.TextColor3 = entry.Active and NeverLose.AccentColor or Color3.fromRGB(255 , 255 , 255);
+		entry.NameLabel.TextColor3 = active and NeverLose.AccentColor or Color3.fromRGB(255 , 255 , 255);
 	end;
 
 	function KeybindList:Add(Entry)
@@ -7534,6 +7941,7 @@ function NeverLose:CreateKeybindList(Config)
 			Mode = 'Hold',    -- 'Hold' | 'Toggle' | 'Always'
 			Default = false,
 			Callback = EmptyFunction, -- (active)
+			Source = nil,    -- объект AddKeybind (подставляется автоматически)
 		});
 
 		local Row = Instance.new('Frame');
@@ -7556,7 +7964,7 @@ function NeverLose:CreateKeybindList(Config)
 		NameLabel.Size = UDim2.new(0.5 , -10 , 1 , 0);
 		NameLabel.ZIndex = Z + 2;
 		NameLabel.Font = Enum.Font.GothamMedium;
-		NameLabel.Text = Entry.Name;
+		NameLabel.Text = (Entry.Source and Entry.Source.Name) or Entry.Name;
 		NameLabel.TextColor3 = Color3.fromRGB(255 , 255 , 255);
 		NameLabel.TextSize = 12;
 		NameLabel.TextTruncate = Enum.TextTruncate.AtEnd;
@@ -7582,6 +7990,7 @@ function NeverLose:CreateKeybindList(Config)
 			Name = Entry.Name,
 			Key = Entry.Key,
 			Flag = Entry.Flag,
+			Source = Entry.Source,
 			Mode = Entry.Mode,
 			Callback = Entry.Callback,
 			Active = (Entry.Mode == 'Always') or Entry.Default,
@@ -7590,6 +7999,10 @@ function NeverLose:CreateKeybindList(Config)
 		local Item = {};
 
 		function Item:SetActive(v)
+			if entry.Source then
+				return;
+			end;
+
 			v = v and true or false;
 
 			if entry.Active == v then
@@ -7628,6 +8041,10 @@ function NeverLose:CreateKeybindList(Config)
 		end;
 
 		function Item:Remove()
+			if entry.Conn then
+				entry.Conn:Disconnect();
+			end;
+
 			local i = table.find(Entries , entry);
 
 			if i then
@@ -7639,6 +8056,12 @@ function NeverLose:CreateKeybindList(Config)
 
 		table.insert(Entries , entry);
 		refresh(entry);
+
+		if entry.Source then
+			entry.Conn = entry.Source.Changed:Connect(function()
+				refresh(entry);
+			end);
+		end;
 
 		-- клавиша могла быть изменена в AddKeybind: обновляем текст, когда меняется флаг
 		if entry.Flag then
@@ -7681,7 +8104,7 @@ function NeverLose:CreateKeybindList(Config)
 		end;
 
 		for _ , entry in next , Entries do
-			if entry.Mode ~= 'Always' and matches(resolveKey(entry) , input) then
+			if not entry.Source and entry.Mode ~= 'Always' and matches(resolveKey(entry) , input) then
 				if entry.Mode == 'Toggle' then
 					entry.Active = not entry.Active;
 				else
@@ -7696,7 +8119,7 @@ function NeverLose:CreateKeybindList(Config)
 
 	NeverLose:AddSignal(UserInputService.InputEnded:Connect(function(input)
 		for _ , entry in next , Entries do
-			if entry.Mode == 'Hold' and entry.Active and matches(resolveKey(entry) , input) then
+			if not entry.Source and entry.Mode == 'Hold' and entry.Active and matches(resolveKey(entry) , input) then
 				entry.Active = false;
 				refresh(entry);
 				task.spawn(entry.Callback , false);
@@ -7726,6 +8149,15 @@ function NeverLose:CreateKeybindList(Config)
 
 	KeybindList.Root = Root;
 	resize();
+
+	NeverLose.KeybindList = KeybindList;
+
+	-- подхватываем все AddKeybind, созданные до списка
+	for _ , kb in next , NeverLose.KeybindRegistry or {} do
+		if kb.ShowInList then
+			KeybindList:Add({ Source = kb });
+		end;
+	end;
 
 	return KeybindList;
 end;
