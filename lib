@@ -1986,10 +1986,10 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 			end;
 		end;
 
-		local ROW_HEIGHT = 18;      -- строка с подписью и боксом значения
-		local TRACK_Y = 22;         -- отступ полосы сверху
-		local TRACK_HEIGHT = 14;    -- высота области полосы (для нажатия)
-		local TOTAL_HEIGHT = 36;    -- общая высота элемента
+		local ROW_HEIGHT = 18;
+		local TRACK_Y = 22;
+		local TRACK_HEIGHT = 14;
+		local TOTAL_HEIGHT = 36;
 		local boxSize = 2;
 
 		local Slider = Instance.new("Frame")
@@ -2021,7 +2021,6 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 		UICorner.CornerRadius = UDim.new(0, 4)
 		UICorner.Parent = Slider
 
-		-- Подпись слева в верхней строке
 		TitleLabel.Name = NeverLose.RandomString();
 		TitleLabel.Parent = Slider
 		TitleLabel.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
@@ -2040,7 +2039,6 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 		TitleLabel.TextYAlignment = Enum.TextYAlignment.Center
 		TitleLabel.TextTruncate = Enum.TextTruncate.AtEnd
 
-		-- Бокс значения справа в верхней строке
 		ValueFrame.Name = NeverLose.RandomString();
 		ValueFrame.Parent = Slider
 		ValueFrame.AnchorPoint = Vector2.new(1, 0)
@@ -2076,7 +2074,6 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 		ValueLabel.ClearTextOnFocus = false;
 		ValueLabel.TextTransparency = 0.350
 
-		-- Полоса на всю ширину под подписью
 		SlideMain.Name = NeverLose.RandomString();
 		SlideMain.Parent = Slider
 		SlideMain.AnchorPoint = Vector2.new(0, 0)
@@ -3971,6 +3968,22 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 		end;
 
 		return UserFrameItem;
+	end;
+
+	function idx:AddSlider(Config)
+		local Row = Instance.new("Frame")
+		Row.Name = NeverLose.RandomString();
+		Row.Parent = Frame
+		Row.BackgroundTransparency = 1
+		Row.BorderSizePixel = 0
+		Row.Position = UDim2.new(0, 11, 0, 0)
+		Row.Size = UDim2.new(1, -22, 0, 36)
+		Row.ZIndex = LayerIndex + 9
+		Row.LayoutOrder = -(#Frame:GetChildren() + 5);
+
+		local Handle = NeverLose:RegisiterHandler(Row, Signel)
+
+		return Handle:AddSlider(Config)
 	end;
 
 	return idx;
