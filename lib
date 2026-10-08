@@ -3546,7 +3546,7 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 		BasedFrame.BackgroundTransparency = 1.000
 		BasedFrame.BorderColor3 = Color3.fromRGB(0, 0, 0)
 		BasedFrame.BorderSizePixel = 0
-		BasedFrame.Size = UDim2.new(1, 0, 0, 30)
+		BasedFrame.Size = UDim2.new(1, 0, 0, 38)
 		BasedFrame.ZIndex = LayerIndex + 8
 
 		NeverLose:AddQuery(BasedFrame , Name);
@@ -3557,14 +3557,14 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 		BasedLabel.BackgroundTransparency = 1.000
 		BasedLabel.BorderColor3 = Color3.fromRGB(0, 0, 0)
 		BasedLabel.BorderSizePixel = 0
-		BasedLabel.Position = UDim2.new(0, 11, 0, 6)
-		BasedLabel.Size = UDim2.new(0,110, 0, 15)
+		BasedLabel.Position = UDim2.new(0, 11, 0, 9)
+		BasedLabel.Size = UDim2.new(0, 200, 0, 22)
 		BasedLabel.ZIndex = LayerIndex + 9
 		BasedLabel.Font = Enum.Font.GothamMedium
 		BasedLabel.Text = Name
 		BasedLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-		BasedLabel.TextSize = 13.000
-		BasedLabel.TextScaled = true
+		BasedLabel.TextSize = 16.000
+		BasedLabel.TextScaled = false
 		BasedLabel.TextTransparency = 0.35
 		BasedLabel.TextXAlignment = Enum.TextXAlignment.Left
 		--BasedLabel.AutomaticSize = Enum.AutomaticSize.X
