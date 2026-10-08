@@ -1956,6 +1956,7 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 			Nums = {},
 			Flag = nil,
 			Size = 125,
+			Name = "",
 			Callback = EmptyFunction,
 		});
 
@@ -1987,6 +1988,7 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 
 		local Slider = Instance.new("Frame")
 		local UICorner = Instance.new("UICorner")
+		local TitleLabel = Instance.new("TextLabel")
 		local ValueFrame = Instance.new("Frame")
 		local UICorner_2 = Instance.new("UICorner")
 		local UIStroke = Instance.new("UIStroke")
@@ -2000,6 +2002,10 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 		local UICorner_5 = Instance.new("UICorner")
 		local boxSize = 2;
 
+		local TITLE_HEIGHT = 14;
+		local ROW_HEIGHT = 18;
+		local ROW_Y = TITLE_HEIGHT + 4;
+
 		Slider.Name = NeverLose.RandomString();
 		Slider.Parent = Handler
 		Slider.BackgroundColor3 = Color3.fromRGB(26, 28, 36)
@@ -2007,12 +2013,29 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 		Slider.BorderColor3 = Color3.fromRGB(0, 0, 0)
 		Slider.BorderSizePixel = 0
 		Slider.ClipsDescendants = false
-		Slider.Size = UDim2.new(0, Config.Size, 0, 18)
+		Slider.Size = UDim2.new(0, Config.Size, 0, TITLE_HEIGHT + 4 + ROW_HEIGHT)
 		Slider.ZIndex = ZINdex + 13
 		Slider.LayoutOrder = -(#Handler:GetChildren() + 5);
 
 		UICorner.CornerRadius = UDim.new(0, 4)
 		UICorner.Parent = Slider
+
+		TitleLabel.Name = NeverLose.RandomString();
+		TitleLabel.Parent = Slider
+		TitleLabel.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+		TitleLabel.BackgroundTransparency = 1.000
+		TitleLabel.BorderColor3 = Color3.fromRGB(0, 0, 0)
+		TitleLabel.BorderSizePixel = 0
+		TitleLabel.Position = UDim2.new(0, 0, 0, 0)
+		TitleLabel.Size = UDim2.new(1, 0, 0, TITLE_HEIGHT)
+		TitleLabel.ZIndex = ZINdex + 13
+		TitleLabel.Font = Enum.Font.GothamMedium
+		TitleLabel.Text = tostring(Config.Name)
+		TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+		TitleLabel.TextSize = 11.000
+		TitleLabel.TextTransparency = 0.350
+		TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+		TitleLabel.TextYAlignment = Enum.TextYAlignment.Center
 
 		ValueFrame.Name = NeverLose.RandomString();
 		ValueFrame.Parent = Slider
@@ -2021,8 +2044,8 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 		ValueFrame.BorderColor3 = Color3.fromRGB(0, 0, 0)
 		ValueFrame.BorderSizePixel = 0
 		ValueFrame.ClipsDescendants = true
-		ValueFrame.Position = UDim2.new(1, 0, 0, 0)
-		ValueFrame.Size = UDim2.new(0, SliderLib.MaximumSize + boxSize, 0, 18)
+		ValueFrame.Position = UDim2.new(1, 0, 0, ROW_Y)
+		ValueFrame.Size = UDim2.new(0, SliderLib.MaximumSize + boxSize, 0, ROW_HEIGHT)
 		ValueFrame.ZIndex = ZINdex + 13
 
 		UICorner_2.CornerRadius = UDim.new(0, 4)
@@ -2056,8 +2079,8 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 		SlideMain.BackgroundTransparency = 1.000
 		SlideMain.BorderColor3 = Color3.fromRGB(0, 0, 0)
 		SlideMain.BorderSizePixel = 0
-		SlideMain.Position = UDim2.new(0, 0, 0.5, 0)
-		SlideMain.Size = UDim2.new(1, -((SliderLib.MaximumSize + 11)), 0, 18)
+		SlideMain.Position = UDim2.new(0, 0, 0, ROW_Y + ROW_HEIGHT / 2)
+		SlideMain.Size = UDim2.new(1, -((SliderLib.MaximumSize + 11)), 0, ROW_HEIGHT)
 		SlideMain.ZIndex = ZINdex + 13
 
 		SlideFrame.Name = NeverLose.RandomString();
@@ -2099,10 +2122,8 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 		local LoadText = LPH_NO_VIRTUALIZE(function()
 			if Config.Nums[Config.Default] then
 				ValueLabel.Text = Config.Nums[Config.Default]
-
 			else
 				ValueLabel.Text = tostring(Config.Default)..tostring(Config.Type);
-
 			end;
 		end);
 
@@ -2125,7 +2146,6 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 				else
 					LoadText();
 				end;
-
 			else
 				LoadText()
 			end;
@@ -2135,7 +2155,7 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 			if value then
 				NeverLose.PlayAnimate(ValueFrame,SlowyTween,{
 					BackgroundTransparency = 0,
-					Size = UDim2.new(0, SliderLib.MaximumSize + boxSize, 0, 18)
+					Size = UDim2.new(0, SliderLib.MaximumSize + boxSize, 0, ROW_HEIGHT)
 				});
 
 				NeverLose.PlayAnimate(UIStroke,SlowyTween,{
@@ -2143,6 +2163,10 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 				});
 
 				NeverLose.PlayAnimate(ValueLabel,SlowyTween,{
+					TextTransparency = 0.350
+				});
+
+				NeverLose.PlayAnimate(TitleLabel,SlowyTween,{
 					TextTransparency = 0.350
 				});
 
@@ -2168,6 +2192,10 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 				});
 
 				NeverLose.PlayAnimate(ValueLabel,SlowyTween,{
+					TextTransparency = 1
+				});
+
+				NeverLose.PlayAnimate(TitleLabel,SlowyTween,{
 					TextTransparency = 1
 				});
 
@@ -2203,7 +2231,6 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 			}):Play();
 
 			LoadText()
-
 
 			Config.Callback(Value)
 		end;
