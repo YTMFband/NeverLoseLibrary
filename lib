@@ -1986,6 +1986,12 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 			end;
 		end;
 
+		local ROW_HEIGHT = 18;      -- строка с подписью и боксом значения
+		local TRACK_Y = 22;         -- отступ полосы сверху
+		local TRACK_HEIGHT = 14;    -- высота области полосы (для нажатия)
+		local TOTAL_HEIGHT = 36;    -- общая высота элемента
+		local boxSize = 2;
+
 		local Slider = Instance.new("Frame")
 		local UICorner = Instance.new("UICorner")
 		local TitleLabel = Instance.new("TextLabel")
@@ -2000,11 +2006,6 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 		local UICorner_4 = Instance.new("UICorner")
 		local Frame = Instance.new("Frame")
 		local UICorner_5 = Instance.new("UICorner")
-		local boxSize = 2;
-
-		local TITLE_HEIGHT = 14;
-		local ROW_HEIGHT = 18;
-		local ROW_Y = TITLE_HEIGHT + 4;
 
 		Slider.Name = NeverLose.RandomString();
 		Slider.Parent = Handler
@@ -2013,13 +2014,14 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 		Slider.BorderColor3 = Color3.fromRGB(0, 0, 0)
 		Slider.BorderSizePixel = 0
 		Slider.ClipsDescendants = false
-		Slider.Size = UDim2.new(0, Config.Size, 0, TITLE_HEIGHT + 4 + ROW_HEIGHT)
+		Slider.Size = UDim2.new(1, 0, 0, TOTAL_HEIGHT)
 		Slider.ZIndex = ZINdex + 13
 		Slider.LayoutOrder = -(#Handler:GetChildren() + 5);
 
 		UICorner.CornerRadius = UDim.new(0, 4)
 		UICorner.Parent = Slider
 
+		-- Подпись слева в верхней строке
 		TitleLabel.Name = NeverLose.RandomString();
 		TitleLabel.Parent = Slider
 		TitleLabel.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
@@ -2027,16 +2029,18 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 		TitleLabel.BorderColor3 = Color3.fromRGB(0, 0, 0)
 		TitleLabel.BorderSizePixel = 0
 		TitleLabel.Position = UDim2.new(0, 0, 0, 0)
-		TitleLabel.Size = UDim2.new(1, 0, 0, TITLE_HEIGHT)
+		TitleLabel.Size = UDim2.new(1, -(SliderLib.MaximumSize + boxSize + 8), 0, ROW_HEIGHT)
 		TitleLabel.ZIndex = ZINdex + 13
 		TitleLabel.Font = Enum.Font.GothamMedium
 		TitleLabel.Text = tostring(Config.Name)
 		TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-		TitleLabel.TextSize = 11.000
+		TitleLabel.TextSize = 12.000
 		TitleLabel.TextTransparency = 0.350
 		TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
 		TitleLabel.TextYAlignment = Enum.TextYAlignment.Center
+		TitleLabel.TextTruncate = Enum.TextTruncate.AtEnd
 
+		-- Бокс значения справа в верхней строке
 		ValueFrame.Name = NeverLose.RandomString();
 		ValueFrame.Parent = Slider
 		ValueFrame.AnchorPoint = Vector2.new(1, 0)
@@ -2044,7 +2048,7 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 		ValueFrame.BorderColor3 = Color3.fromRGB(0, 0, 0)
 		ValueFrame.BorderSizePixel = 0
 		ValueFrame.ClipsDescendants = true
-		ValueFrame.Position = UDim2.new(1, 0, 0, ROW_Y)
+		ValueFrame.Position = UDim2.new(1, 0, 0, 0)
 		ValueFrame.Size = UDim2.new(0, SliderLib.MaximumSize + boxSize, 0, ROW_HEIGHT)
 		ValueFrame.ZIndex = ZINdex + 13
 
@@ -2072,15 +2076,16 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 		ValueLabel.ClearTextOnFocus = false;
 		ValueLabel.TextTransparency = 0.350
 
+		-- Полоса на всю ширину под подписью
 		SlideMain.Name = NeverLose.RandomString();
 		SlideMain.Parent = Slider
-		SlideMain.AnchorPoint = Vector2.new(0, 0.5)
+		SlideMain.AnchorPoint = Vector2.new(0, 0)
 		SlideMain.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 		SlideMain.BackgroundTransparency = 1.000
 		SlideMain.BorderColor3 = Color3.fromRGB(0, 0, 0)
 		SlideMain.BorderSizePixel = 0
-		SlideMain.Position = UDim2.new(0, 0, 0, ROW_Y + ROW_HEIGHT / 2)
-		SlideMain.Size = UDim2.new(1, -((SliderLib.MaximumSize + 11)), 0, ROW_HEIGHT)
+		SlideMain.Position = UDim2.new(0, 0, 0, TRACK_Y)
+		SlideMain.Size = UDim2.new(1, 0, 0, TRACK_HEIGHT)
 		SlideMain.ZIndex = ZINdex + 13
 
 		SlideFrame.Name = NeverLose.RandomString();
@@ -2221,8 +2226,6 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 			local SizeScale = math.clamp((((Input.Position.X) - SlideMain.AbsolutePosition.X) / SlideMain.AbsoluteSize.X), 0, 1);
 			local Main = ((Config.Max - Config.Min) * SizeScale) + Config.Min;
 			local Value = NeverLose.Rounding(Main,Config.Rounding);
-			local PositionX = UDim2.fromScale(SizeScale, 1);
-			local Size = ((Value - Config.Min) / (Config.Max - Config.Min)) + 0.02;
 
 			Config.Default = Value;
 
@@ -2259,7 +2262,7 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 
 			NeverLose:AddSignal(UserInputService.InputChanged:Connect(LPH_NO_VIRTUALIZE(function(Input)
 				if IsHold then
-					if (Input.UserInputType == Enum.UserInputType.MouseMovement or Input.UserInputType == Enum.UserInputType.Touch)  then
+					if (Input.UserInputType == Enum.UserInputType.MouseMovement or Input.UserInputType == Enum.UserInputType.Touch) then
 						if UserInputService.TouchEnabled then
 							if not NeverLose:IsMouseOverFrame(SlideMain) then
 								IsHold = false
