@@ -263,8 +263,8 @@ NeverLose.Scales = {
 NeverLose.IconColor = Color3.fromRGB(255, 255, 255);
 NeverLose.ScreenGui = GlobalWindow;
 NeverLose.Flags = {};
-NeverLose.AccentColor = Color3.fromRGB(66, 128, 226);
-NeverLose.MainColor = Color3.fromRGB(25, 25, 26);
+NeverLose.AccentColor = Color3.fromRGB(78, 127, 252);
+NeverLose.MainColor = Color3.fromRGB(8, 8, 13);
 NeverLose.RegisiteryColor = {};
 NeverLose.NameRegisitry = {};
 NeverLose.IsMosueOverOtherFrame = false;
@@ -3943,6 +3943,592 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 		return UserFrameItem;
 	end;
 
+	function idx:AddPlayerList(Config)
+		Config = NeverLose:ProcessParams(Config , {
+			Name = 'Playerlist',
+			Height = 320,
+			Flag = nil,
+			Callback = EmptyFunction,       -- (player, priority)
+			SelectCallback = EmptyFunction, -- (player or nil)
+		});
+
+		local Z = LayerIndex + 9;
+		local PlayerList = {};
+		local Priorities = {
+			{ Name = 'Neutral'   , Color = Color3.fromRGB(190, 195, 205) },
+			{ Name = 'Friend'    , Color = Color3.fromRGB(95 , 214, 130) },
+			{ Name = 'Enemy'     , Color = Color3.fromRGB(240, 90 , 90 ) },
+			{ Name = 'Whitelist' , Color = Color3.fromRGB(245, 200, 80 ) },
+		};
+		local PriorityColor = {};
+
+		for _ , v in next , Priorities do
+			PriorityColor[v.Name] = v.Color;
+		end;
+
+		local PriorityMap = {};  -- [UserId string] = priority name
+		local Rows = {};         -- [Player] = row table
+		local Selected = nil;
+		local Search = '';
+		local Thumbs = {};
+
+		local function make(class , props , parent)
+			local obj = Instance.new(class);
+
+			obj.Name = NeverLose.RandomString();
+
+			if obj:IsA('GuiObject') then
+				obj.BorderSizePixel = 0;
+				obj.BorderColor3 = Color3.fromRGB(0 , 0 , 0);
+				obj.ZIndex = Z;
+			end;
+
+			for k , v in next , props do
+				obj[k] = v;
+			end;
+
+			obj.Parent = parent;
+
+			return obj;
+		end;
+
+		local function corner(parent , radius)
+			return make('UICorner' , { CornerRadius = UDim.new(0 , radius) } , parent);
+		end;
+
+		local function stroke(parent)
+			return make('UIStroke' , {
+				Color = Color3.fromRGB(45 , 48 , 58),
+				Transparency = 0.65,
+				ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+			} , parent);
+		end;
+
+		local Container = make('Frame' , {
+			BackgroundTransparency = 1,
+			Size = UDim2.new(1 , 0 , 0 , Config.Height),
+			ZIndex = LayerIndex + 8,
+		} , Frame);
+
+		NeverLose:AddQuery(Container , Config.Name);
+
+		----------------------------------------------------------------- search
+		local SearchFrame = make('Frame' , {
+			BackgroundColor3 = Color3.fromRGB(10 , 13 , 21),
+			Position = UDim2.new(0 , 10 , 0 , 2),
+			Size = UDim2.new(1 , -20 , 0 , 24),
+		} , Container);
+		corner(SearchFrame , 6);
+		stroke(SearchFrame);
+
+		local SearchBox = make('TextBox' , {
+			BackgroundTransparency = 1,
+			Position = UDim2.new(0 , 8 , 0 , 0),
+			Size = UDim2.new(1 , -16 , 1 , 0),
+			ZIndex = Z + 1,
+			ClearTextOnFocus = false,
+			Font = Enum.Font.GothamMedium,
+			PlaceholderText = 'Search...',
+			PlaceholderColor3 = Color3.fromRGB(140 , 145 , 160),
+			Text = '',
+			TextColor3 = Color3.fromRGB(255 , 255 , 255),
+			TextSize = 12,
+			TextTransparency = 0.25,
+			TextXAlignment = Enum.TextXAlignment.Left,
+		} , SearchFrame);
+
+		----------------------------------------------------------------- header
+		local function headerLabel(text , x , w , align)
+			return make('TextLabel' , {
+				BackgroundTransparency = 1,
+				Position = UDim2.new(x , 8 , 0 , 32),
+				Size = UDim2.new(w , -8 , 0 , 16),
+				Font = Enum.Font.GothamMedium,
+				Text = text,
+				TextColor3 = Color3.fromRGB(150 , 155 , 170),
+				TextSize = 11,
+				TextXAlignment = align or Enum.TextXAlignment.Left,
+			} , Container);
+		end;
+
+		headerLabel('Name' , 0 , 0.5);
+		headerLabel('Team' , 0.5 , 0.25);
+		headerLabel('Priority' , 0.75 , 0.25);
+
+		make('Frame' , {
+			AnchorPoint = Vector2.new(0.5 , 0),
+			BackgroundColor3 = Color3.fromRGB(45 , 48 , 58),
+			BackgroundTransparency = 0.65,
+			Position = UDim2.new(0.5 , 0 , 0 , 50),
+			Size = UDim2.new(1 , -20 , 0 , 1),
+		} , Container);
+
+		----------------------------------------------------------------- info panel
+		local InfoHeight = 108;
+		local ListHeight = Config.Height - 54 - InfoHeight - 8;
+
+		local List = make('ScrollingFrame' , {
+			Active = true,
+			BackgroundTransparency = 1,
+			Position = UDim2.new(0 , 10 , 0 , 54),
+			Size = UDim2.new(1 , -20 , 0 , ListHeight),
+			CanvasSize = UDim2.new(0 , 0 , 0 , 0),
+			AutomaticCanvasSize = Enum.AutomaticSize.Y,
+			ScrollBarThickness = 2,
+			ScrollBarImageColor3 = NeverLose.AccentColor,
+			ScrollBarImageTransparency = 0.3,
+			ScrollingDirection = Enum.ScrollingDirection.Y,
+			ClipsDescendants = true,
+		} , Container);
+
+		make('UIListLayout' , {
+			Padding = UDim.new(0 , 2),
+			SortOrder = Enum.SortOrder.LayoutOrder,
+		} , List);
+
+		local Info = make('Frame' , {
+			BackgroundColor3 = Color3.fromRGB(25 , 27 , 33),
+			BackgroundTransparency = 0.35,
+			Position = UDim2.new(0 , 10 , 1 , -InfoHeight),
+			Size = UDim2.new(1 , -20 , 0 , InfoHeight),
+		} , Container);
+		corner(Info , 8);
+		stroke(Info);
+
+		local Avatar = make('ImageLabel' , {
+			BackgroundColor3 = Color3.fromRGB(10 , 13 , 21),
+			Position = UDim2.new(0 , 8 , 0 , 8),
+			Size = UDim2.new(0 , 50 , 0 , 50),
+			Image = '',
+			ZIndex = Z + 1,
+		} , Info);
+		corner(Avatar , 25);
+
+		local function infoLabel(y)
+			return make('TextLabel' , {
+				BackgroundTransparency = 1,
+				Position = UDim2.new(0 , 66 , 0 , y),
+				Size = UDim2.new(1 , -74 , 0 , 16),
+				Font = Enum.Font.GothamMedium,
+				RichText = true,
+				Text = '',
+				TextColor3 = Color3.fromRGB(255 , 255 , 255),
+				TextSize = 12,
+				TextTransparency = 0.2,
+				TextTruncate = Enum.TextTruncate.AtEnd,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				ZIndex = Z + 1,
+			} , Info);
+		end;
+
+		local InfoName = infoLabel(8);
+		local InfoPriority = infoLabel(26);
+		local InfoTeam = infoLabel(44);
+
+		local ButtonRow = make('Frame' , {
+			BackgroundTransparency = 1,
+			Position = UDim2.new(0 , 8 , 1 , -34),
+			Size = UDim2.new(1 , -16 , 0 , 26),
+			ZIndex = Z + 1,
+		} , Info);
+
+		make('UIListLayout' , {
+			FillDirection = Enum.FillDirection.Horizontal,
+			Padding = UDim.new(0 , 4),
+			SortOrder = Enum.SortOrder.LayoutOrder,
+		} , ButtonRow);
+
+		local PriorityButtons = {};
+
+		----------------------------------------------------------------- helpers
+		local function label(key , value)
+			return string.format('<font color="rgb(150,155,170)">%s</font>  %s' , key , value);
+		end;
+
+		local function colorTag(color , text)
+			return string.format('<font color="rgb(%d,%d,%d)">%s</font>' ,
+				math.floor(color.R * 255) , math.floor(color.G * 255) , math.floor(color.B * 255) , text);
+		end;
+
+		local function getPriorityName(player)
+			if player == LocalPlayer then
+				return 'Client';
+			end;
+
+			return PriorityMap[tostring(player.UserId)] or 'Neutral';
+		end;
+
+		local function getTeamName(player)
+			return (player.Team and player.Team.Name) or 'None';
+		end;
+
+		local function priorityColor(name)
+			if name == 'Client' then
+				return NeverLose.AccentColor;
+			end;
+
+			return PriorityColor[name] or PriorityColor.Neutral;
+		end;
+
+		local function matchesSearch(player)
+			if Search == '' then
+				return true;
+			end;
+
+			return string.find(string.lower(player.Name) , Search , 1 , true) ~= nil
+				or string.find(string.lower(player.DisplayName) , Search , 1 , true) ~= nil;
+		end;
+
+		local function updateButtons()
+			local current = Selected and getPriorityName(Selected);
+			local locked = (Selected == nil) or (Selected == LocalPlayer);
+
+			for _ , b in next , PriorityButtons do
+				local active = (b.Name == current);
+
+				NeverLose.PlayAnimate(b.Button , SlowyTween , {
+					BackgroundColor3 = active and b.Color or Color3.fromRGB(10 , 13 , 21),
+					BackgroundTransparency = active and 0.7 or 0,
+				});
+
+				NeverLose.PlayAnimate(b.Stroke , SlowyTween , {
+					Color = active and b.Color or Color3.fromRGB(45 , 48 , 58),
+					Transparency = active and 0.3 or 0.65,
+				});
+
+				b.Button.TextColor3 = active and b.Color or Color3.fromRGB(190 , 195 , 205);
+				b.Button.TextTransparency = locked and 0.7 or 0.1;
+			end;
+		end;
+
+		local function updateInfo()
+			if not Selected then
+				Avatar.Image = '';
+				InfoName.Text = label('Name' , '-');
+				InfoPriority.Text = label('Priority' , '-');
+				InfoTeam.Text = label('Team' , '-');
+				updateButtons();
+				return;
+			end;
+
+			local name = getPriorityName(Selected);
+
+			InfoName.Text = label('Name' , string.format('%s (%s)' , Selected.DisplayName , Selected.Name));
+			InfoPriority.Text = label('Priority' , colorTag(priorityColor(name) , name));
+			InfoTeam.Text = label('Team' , getTeamName(Selected));
+			Avatar.Image = Thumbs[Selected.UserId] or '';
+			updateButtons();
+		end;
+
+		local function updateRow(player)
+			local row = Rows[player];
+
+			if not row then
+				return;
+			end;
+
+			local name = getPriorityName(player);
+
+			row.Team.Text = getTeamName(player);
+			row.Priority.Text = name;
+			row.Priority.TextColor3 = priorityColor(name);
+			row.Button.Visible = matchesSearch(player);
+		end;
+
+		local function resort()
+			local list = {};
+
+			for player in next , Rows do
+				table.insert(list , player);
+			end;
+
+			table.sort(list , function(a , b)
+				if a == LocalPlayer then return true; end;
+				if b == LocalPlayer then return false; end;
+
+				return string.lower(a.Name) < string.lower(b.Name);
+			end);
+
+			for i , player in next , list do
+				Rows[player].Button.LayoutOrder = i;
+			end;
+		end;
+
+		local function paintRow(player)
+			local row = Rows[player];
+
+			if not row then
+				return;
+			end;
+
+			NeverLose.PlayAnimate(row.Button , SlowyTween , {
+				BackgroundColor3 = (player == Selected) and NeverLose.AccentColor or Color3.fromRGB(25 , 27 , 33),
+				BackgroundTransparency = (player == Selected) and 0.75 or 1,
+			});
+		end;
+
+		----------------------------------------------------------------- API
+		function PlayerList:GetSelected()
+			return Selected;
+		end;
+
+		function PlayerList:Select(player)
+			local old = Selected;
+
+			Selected = (player and Rows[player]) and player or nil;
+
+			if old then paintRow(old); end;
+			if Selected then paintRow(Selected); end;
+
+			updateInfo();
+
+			task.spawn(Config.SelectCallback , Selected);
+		end;
+
+		function PlayerList:GetPriority(player)
+			return getPriorityName(player);
+		end;
+
+		function PlayerList:SetPriority(player , priority)
+			if typeof(player) ~= 'Instance' or player == LocalPlayer then
+				return;
+			end;
+
+			if not PriorityColor[priority] then
+				return;
+			end;
+
+			local key = tostring(player.UserId);
+
+			if priority == 'Neutral' then
+				PriorityMap[key] = nil;
+			else
+				PriorityMap[key] = priority;
+			end;
+
+			updateRow(player);
+
+			if player == Selected then
+				updateInfo();
+			end;
+
+			task.spawn(Config.Callback , player , priority);
+		end;
+
+		function PlayerList:IsWhitelisted(player)
+			return getPriorityName(player) == 'Whitelist';
+		end;
+
+		function PlayerList:IsFriend(player)
+			return getPriorityName(player) == 'Friend';
+		end;
+
+		function PlayerList:IsEnemy(player)
+			return getPriorityName(player) == 'Enemy';
+		end;
+
+		function PlayerList:GetByPriority(priority)
+			local out = {};
+
+			for player in next , Rows do
+				if getPriorityName(player) == priority then
+					table.insert(out , player);
+				end;
+			end;
+
+			return out;
+		end;
+
+		function PlayerList:GetValue()
+			local copy = {};
+
+			for k , v in next , PriorityMap do
+				copy[k] = v;
+			end;
+
+			return copy;
+		end;
+
+		function PlayerList:SetValue(data)
+			if type(data) ~= 'table' then
+				return;
+			end;
+
+			table.clear(PriorityMap);
+
+			for k , v in next , data do
+				if PriorityColor[v] and v ~= 'Neutral' then
+					PriorityMap[tostring(k)] = v;
+				end;
+			end;
+
+			for player in next , Rows do
+				updateRow(player);
+			end;
+
+			updateInfo();
+		end;
+
+		----------------------------------------------------------------- priority buttons
+		for i , p in next , Priorities do
+			local Button = make('TextButton' , {
+				AutoButtonColor = false,
+				BackgroundColor3 = Color3.fromRGB(10 , 13 , 21),
+				Size = UDim2.new(0.25 , -3 , 1 , 0),
+				ZIndex = Z + 2,
+				Font = Enum.Font.GothamMedium,
+				Text = p.Name,
+				TextColor3 = Color3.fromRGB(190 , 195 , 205),
+				TextSize = 11,
+				LayoutOrder = i,
+			} , ButtonRow);
+
+			corner(Button , 6);
+
+			local Stroke = stroke(Button);
+
+			table.insert(PriorityButtons , {
+				Name = p.Name,
+				Color = p.Color,
+				Button = Button,
+				Stroke = Stroke,
+			});
+
+			NeverLose:AddSignal(Button.MouseButton1Click:Connect(function()
+				if Selected and Selected ~= LocalPlayer then
+					PlayerList:SetPriority(Selected , p.Name);
+				end;
+			end));
+		end;
+
+		----------------------------------------------------------------- rows
+		local function addPlayer(player)
+			if Rows[player] then
+				return;
+			end;
+
+			local Button = make('TextButton' , {
+				AutoButtonColor = false,
+				BackgroundColor3 = Color3.fromRGB(25 , 27 , 33),
+				BackgroundTransparency = 1,
+				Size = UDim2.new(1 , -4 , 0 , 22),
+				Text = '',
+			} , List);
+			corner(Button , 6);
+
+			local function cell(x , w , text)
+				return make('TextLabel' , {
+					BackgroundTransparency = 1,
+					Position = UDim2.new(x , 8 , 0 , 0),
+					Size = UDim2.new(w , -8 , 1 , 0),
+					ZIndex = Z + 1,
+					Font = Enum.Font.GothamMedium,
+					Text = text,
+					TextColor3 = Color3.fromRGB(255 , 255 , 255),
+					TextSize = 12,
+					TextTransparency = 0.2,
+					TextTruncate = Enum.TextTruncate.AtEnd,
+					TextXAlignment = Enum.TextXAlignment.Left,
+				} , Button);
+			end;
+
+			local row = {
+				Button = Button,
+				Name = cell(0 , 0.5 , player.Name),
+				Team = cell(0.5 , 0.25 , getTeamName(player)),
+				Priority = cell(0.75 , 0.25 , getPriorityName(player)),
+			};
+
+			row.Team.TextColor3 = Color3.fromRGB(190 , 195 , 205);
+			Rows[player] = row;
+
+			NeverLose:AddSignal(Button.MouseEnter:Connect(function()
+				if player ~= Selected then
+					NeverLose.PlayAnimate(Button , SlowyTween , { BackgroundTransparency = 0.6 });
+				end;
+			end));
+
+			NeverLose:AddSignal(Button.MouseLeave:Connect(function()
+				if player ~= Selected then
+					NeverLose.PlayAnimate(Button , SlowyTween , { BackgroundTransparency = 1 });
+				end;
+			end));
+
+			NeverLose:AddSignal(Button.MouseButton1Click:Connect(function()
+				PlayerList:Select(player);
+			end));
+
+			NeverLose:AddSignal(player:GetPropertyChangedSignal('Team'):Connect(function()
+				updateRow(player);
+
+				if player == Selected then
+					updateInfo();
+				end;
+			end));
+
+			task.spawn(function()
+				local ok , image = pcall(Players.GetUserThumbnailAsync , Players , player.UserId , Enum.ThumbnailType.HeadShot , Enum.ThumbnailSize.Size100x100);
+
+				if ok and image then
+					Thumbs[player.UserId] = image;
+
+					if player == Selected then
+						Avatar.Image = image;
+					end;
+				end;
+			end);
+
+			updateRow(player);
+			resort();
+		end;
+
+		local function removePlayer(player)
+			local row = Rows[player];
+
+			if not row then
+				return;
+			end;
+
+			if player == Selected then
+				PlayerList:Select(nil);
+			end;
+
+			Rows[player] = nil;
+			row.Button:Destroy();
+		end;
+
+		for _ , player in next , Players:GetPlayers() do
+			addPlayer(player);
+		end;
+
+		NeverLose:AddSignal(Players.PlayerAdded:Connect(addPlayer));
+		NeverLose:AddSignal(Players.PlayerRemoving:Connect(removePlayer));
+
+		NeverLose:AddSignal(SearchBox:GetPropertyChangedSignal('Text'):Connect(function()
+			Search = string.lower(SearchBox.Text);
+
+			for player in next , Rows do
+				updateRow(player);
+			end;
+		end));
+
+		----------------------------------------------------------------- render
+		PlayerList.SetRender = function(value)
+			Container.Visible = value and true or false;
+		end;
+
+		PlayerList.SetRender(Signel:GetValue());
+		Signel:Connect(PlayerList.SetRender);
+
+		updateInfo();
+
+		if Config.Flag then
+			NeverLose.Flags[Config.Flag] = PlayerList;
+		end;
+
+		return PlayerList;
+	end;
+
 	return idx;
 end;
 
@@ -6794,6 +7380,354 @@ function NeverLose:CreateIndicator()
 	end;
 
 	return Indicators;
+end;
+
+function NeverLose:CreateKeybindList(Config)
+	Config = NeverLose:ProcessParams(Config , {
+		Name = 'Keybinds',
+		Position = UDim2.new(0 , 15 , 0.4 , 0),
+		Width = 175,
+		Visible = true,
+		ShowInactive = false, -- true = показывать все бинды, неактивные приглушены
+	});
+
+	local Z = 15;
+	local KeybindList = {};
+	local Entries = {};
+
+	local Root = Instance.new('Frame');
+	local RootCorner = Instance.new('UICorner');
+	local RootStroke = Instance.new('UIStroke');
+	local Header = Instance.new('Frame');
+	local Title = Instance.new('TextLabel');
+	local AccentLine = Instance.new('Frame');
+	local AccentGradient = Instance.new('UIGradient');
+	local Holder = Instance.new('Frame');
+	local HolderLayout = Instance.new('UIListLayout');
+
+	Root.Name = NeverLose.RandomString();
+	Root.Parent = NeverLose.ScreenGui;
+	Root.BackgroundColor3 = NeverLose.MainColor;
+	Root.BackgroundTransparency = 0.1;
+	Root.BorderSizePixel = 0;
+	Root.ClipsDescendants = true;
+	Root.Position = Config.Position;
+	Root.Size = UDim2.new(0 , Config.Width , 0 , 26);
+	Root.ZIndex = Z;
+	Root.Visible = Config.Visible;
+
+	RootCorner.CornerRadius = UDim.new(0 , 8);
+	RootCorner.Parent = Root;
+
+	RootStroke.Color = Color3.fromRGB(45 , 48 , 58);
+	RootStroke.Transparency = 0.65;
+	RootStroke.Parent = Root;
+
+	Header.Name = NeverLose.RandomString();
+	Header.Parent = Root;
+	Header.BackgroundTransparency = 1;
+	Header.BorderSizePixel = 0;
+	Header.Size = UDim2.new(1 , 0 , 0 , 26);
+	Header.ZIndex = Z + 1;
+
+	Title.Name = NeverLose.RandomString();
+	Title.Parent = Header;
+	Title.BackgroundTransparency = 1;
+	Title.BorderSizePixel = 0;
+	Title.Position = UDim2.new(0 , 10 , 0 , 0);
+	Title.Size = UDim2.new(1 , -20 , 1 , 0);
+	Title.ZIndex = Z + 2;
+	Title.Font = Enum.Font.GothamMedium;
+	Title.Text = Config.Name;
+	Title.TextColor3 = Color3.fromRGB(255 , 255 , 255);
+	Title.TextSize = 12;
+	Title.TextTransparency = 0.15;
+	Title.TextXAlignment = Enum.TextXAlignment.Left;
+
+	AccentLine.Name = NeverLose.RandomString();
+	AccentLine.Parent = Header;
+	AccentLine.AnchorPoint = Vector2.new(0.5 , 1);
+	AccentLine.BackgroundColor3 = NeverLose.AccentColor;
+	AccentLine.BorderSizePixel = 0;
+	AccentLine.Position = UDim2.new(0.5 , 0 , 1 , 0);
+	AccentLine.Size = UDim2.new(1 , -16 , 0 , 1);
+	AccentLine.ZIndex = Z + 2;
+
+	AccentGradient.Transparency = NumberSequence.new{
+		NumberSequenceKeypoint.new(0 , 1),
+		NumberSequenceKeypoint.new(0.5 , 0),
+		NumberSequenceKeypoint.new(1 , 1),
+	};
+	AccentGradient.Parent = AccentLine;
+
+	Holder.Name = NeverLose.RandomString();
+	Holder.Parent = Root;
+	Holder.BackgroundTransparency = 1;
+	Holder.BorderSizePixel = 0;
+	Holder.Position = UDim2.new(0 , 0 , 0 , 28);
+	Holder.Size = UDim2.new(1 , 0 , 0 , 0);
+	Holder.ZIndex = Z + 1;
+
+	HolderLayout.Parent = Holder;
+	HolderLayout.SortOrder = Enum.SortOrder.LayoutOrder;
+	HolderLayout.Padding = UDim.new(0 , 0);
+
+	local function resize()
+		local h = HolderLayout.AbsoluteContentSize.Y;
+
+		NeverLose.PlayAnimate(Root , SlowyTween , {
+			Size = UDim2.new(0 , Config.Width , 0 , 28 + h + (h > 0 and 4 or 0)),
+		});
+	end;
+
+	NeverLose:AddSignal(HolderLayout:GetPropertyChangedSignal('AbsoluteContentSize'):Connect(resize));
+
+	NeverLose.Drag(Header , Root , 0.05);
+
+	local function normalizeKey(k)
+		if typeof(k) == 'EnumItem' then
+			return k.Name;
+		end;
+
+		return k;
+	end;
+
+	local function resolveKey(entry)
+		if entry.Flag and NeverLose.Flags[entry.Flag] and NeverLose.Flags[entry.Flag].GetValue then
+			return normalizeKey(NeverLose.Flags[entry.Flag]:GetValue());
+		end;
+
+		return normalizeKey(entry.Key);
+	end;
+
+	local function keyText(key)
+		if not key or key == 'None' then
+			return 'None';
+		end;
+
+		return NeverLose:KeyCodeToStr(key);
+	end;
+
+	local function refresh(entry)
+		local key = resolveKey(entry);
+		local show = entry.Active or Config.ShowInactive;
+
+		entry.KeyLabel.Text = string.format('[%s] %s' , keyText(key) , entry.Mode);
+		entry.Row.Visible = show;
+
+		NeverLose.PlayAnimate(entry.NameLabel , SlowyTween , {
+			TextTransparency = entry.Active and 0.1 or 0.6,
+		});
+
+		NeverLose.PlayAnimate(entry.KeyLabel , SlowyTween , {
+			TextTransparency = entry.Active and 0.3 or 0.7,
+		});
+
+		entry.NameLabel.TextColor3 = entry.Active and NeverLose.AccentColor or Color3.fromRGB(255 , 255 , 255);
+	end;
+
+	function KeybindList:Add(Entry)
+		Entry = NeverLose:ProcessParams(Entry , {
+			Name = 'Keybind',
+			Key = nil,        -- 'E' / Enum.KeyCode.E / 'M1B' / 'M2B'
+			Flag = nil,       -- флаг из AddKeybind: клавиша подтянется сама
+			Mode = 'Hold',    -- 'Hold' | 'Toggle' | 'Always'
+			Default = false,
+			Callback = EmptyFunction, -- (active)
+		});
+
+		local Row = Instance.new('Frame');
+		local NameLabel = Instance.new('TextLabel');
+		local KeyLabel = Instance.new('TextLabel');
+
+		Row.Name = NeverLose.RandomString();
+		Row.Parent = Holder;
+		Row.BackgroundTransparency = 1;
+		Row.BorderSizePixel = 0;
+		Row.Size = UDim2.new(1 , 0 , 0 , 20);
+		Row.ZIndex = Z + 1;
+		Row.LayoutOrder = #Entries + 1;
+
+		NameLabel.Name = NeverLose.RandomString();
+		NameLabel.Parent = Row;
+		NameLabel.BackgroundTransparency = 1;
+		NameLabel.BorderSizePixel = 0;
+		NameLabel.Position = UDim2.new(0 , 10 , 0 , 0);
+		NameLabel.Size = UDim2.new(0.5 , -10 , 1 , 0);
+		NameLabel.ZIndex = Z + 2;
+		NameLabel.Font = Enum.Font.GothamMedium;
+		NameLabel.Text = Entry.Name;
+		NameLabel.TextColor3 = Color3.fromRGB(255 , 255 , 255);
+		NameLabel.TextSize = 12;
+		NameLabel.TextTruncate = Enum.TextTruncate.AtEnd;
+		NameLabel.TextXAlignment = Enum.TextXAlignment.Left;
+
+		KeyLabel.Name = NeverLose.RandomString();
+		KeyLabel.Parent = Row;
+		KeyLabel.BackgroundTransparency = 1;
+		KeyLabel.BorderSizePixel = 0;
+		KeyLabel.Position = UDim2.new(0.5 , 0 , 0 , 0);
+		KeyLabel.Size = UDim2.new(0.5 , -10 , 1 , 0);
+		KeyLabel.ZIndex = Z + 2;
+		KeyLabel.Font = Enum.Font.GothamMedium;
+		KeyLabel.Text = '';
+		KeyLabel.TextColor3 = Color3.fromRGB(190 , 195 , 205);
+		KeyLabel.TextSize = 11;
+		KeyLabel.TextXAlignment = Enum.TextXAlignment.Right;
+
+		local entry = {
+			Row = Row,
+			NameLabel = NameLabel,
+			KeyLabel = KeyLabel,
+			Name = Entry.Name,
+			Key = Entry.Key,
+			Flag = Entry.Flag,
+			Mode = Entry.Mode,
+			Callback = Entry.Callback,
+			Active = (Entry.Mode == 'Always') or Entry.Default,
+		};
+
+		local Item = {};
+
+		function Item:SetActive(v)
+			v = v and true or false;
+
+			if entry.Active == v then
+				return;
+			end;
+
+			entry.Active = v;
+			refresh(entry);
+			task.spawn(entry.Callback , v);
+		end;
+
+		function Item:GetActive()
+			return entry.Active;
+		end;
+
+		function Item:SetName(n)
+			entry.Name = n;
+			NameLabel.Text = n;
+		end;
+
+		function Item:SetKey(k)
+			entry.Key = k;
+			refresh(entry);
+		end;
+
+		function Item:SetMode(m)
+			entry.Mode = m;
+
+			if m == 'Always' then
+				entry.Active = true;
+			elseif m == 'Hold' then
+				entry.Active = false;
+			end;
+
+			refresh(entry);
+		end;
+
+		function Item:Remove()
+			local i = table.find(Entries , entry);
+
+			if i then
+				table.remove(Entries , i);
+			end;
+
+			Row:Destroy();
+		end;
+
+		table.insert(Entries , entry);
+		refresh(entry);
+
+		-- клавиша могла быть изменена в AddKeybind: обновляем текст, когда меняется флаг
+		if entry.Flag then
+			task.spawn(function()
+				local last = resolveKey(entry);
+
+				while Row.Parent do
+					task.wait(0.25);
+
+					local now = resolveKey(entry);
+
+					if now ~= last then
+						last = now;
+						refresh(entry);
+					end;
+				end;
+			end);
+		end;
+
+		return Item;
+	end;
+
+	local function matches(key , input)
+		if not key or key == 'None' then
+			return false;
+		end;
+
+		if key == 'M1B' then
+			return input.UserInputType == Enum.UserInputType.MouseButton1;
+		elseif key == 'M2B' then
+			return input.UserInputType == Enum.UserInputType.MouseButton2;
+		end;
+
+		return input.KeyCode ~= Enum.KeyCode.Unknown and input.KeyCode.Name == key;
+	end;
+
+	NeverLose:AddSignal(UserInputService.InputBegan:Connect(function(input , gp)
+		if gp or UserInputService:GetFocusedTextBox() then
+			return;
+		end;
+
+		for _ , entry in next , Entries do
+			if entry.Mode ~= 'Always' and matches(resolveKey(entry) , input) then
+				if entry.Mode == 'Toggle' then
+					entry.Active = not entry.Active;
+				else
+					entry.Active = true;
+				end;
+
+				refresh(entry);
+				task.spawn(entry.Callback , entry.Active);
+			end;
+		end;
+	end));
+
+	NeverLose:AddSignal(UserInputService.InputEnded:Connect(function(input)
+		for _ , entry in next , Entries do
+			if entry.Mode == 'Hold' and entry.Active and matches(resolveKey(entry) , input) then
+				entry.Active = false;
+				refresh(entry);
+				task.spawn(entry.Callback , false);
+			end;
+		end;
+	end));
+
+	function KeybindList:SetVisible(v)
+		Root.Visible = v and true or false;
+	end;
+
+	function KeybindList:Toggle()
+		Root.Visible = not Root.Visible;
+	end;
+
+	function KeybindList:SetShowInactive(v)
+		Config.ShowInactive = v and true or false;
+
+		for _ , entry in next , Entries do
+			refresh(entry);
+		end;
+	end;
+
+	function KeybindList:SetTitle(t)
+		Title.Text = t;
+	end;
+
+	KeybindList.Root = Root;
+	resize();
+
+	return KeybindList;
 end;
 
 function NeverLose:Unload()
