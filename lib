@@ -273,6 +273,42 @@ NeverLose.ImageColorMapping = "rbxassetid://4155801252";
 NeverLose.IsDropdownOn = false;
 NeverLose.IsColorPickerOn = false;
 
+-- клавиши, которые нельзя назначить на бинд (редактируется: NeverLose.KeyBlacklist.Delete = nil разрешит клавишу)
+NeverLose.KeyBlacklist = {
+	Insert = true , Delete = true , Home = true , End = true , PageUp = true , PageDown = true,
+	Print = true , Pause = true , Break = true , ScrollLock = true , NumLock = true , CapsLock = true,
+	Escape = true , Menu = true , LeftSuper = true , RightSuper = true , F9 = true , F11 = true,
+};
+
+function NeverLose:IsKeyBlocked(key)
+	if typeof(key) == 'EnumItem' then
+		key = key.Name;
+	end;
+
+	if type(key) ~= 'string' or key == '' or key == 'None' or key == 'M1B' or key == 'M2B' then
+		return false;
+	end;
+
+	if NeverLose.KeyBlacklist[key] or key == 'Unknown' then
+		return true;
+	end;
+
+	-- кнопки геймпада и прочее, что не является клавишей клавиатуры
+	if string.sub(key , 1 , 6) == 'Button' or string.sub(key , 1 , 10) == 'Thumbstick' or string.sub(key , 1 , 4) == 'DPad' or string.sub(key , 1 , 5) == 'World' then
+		return true;
+	end;
+
+	-- клавиша открытия меню (по умолчанию Insert)
+	local win = NeverLose.CurrentWindow;
+	local menuKey = win and win.Keybind;
+
+	if typeof(menuKey) == 'EnumItem' then
+		menuKey = menuKey.Name;
+	end;
+
+	return menuKey ~= nil and menuKey == key;
+end;
+
 if getcustomasset then
 	local link = "https://github.com/4lpaca-pin/NeverLose/blob/main/assets/%s?raw=true";
 	local dir = 'NLAssets';
@@ -2513,6 +2549,7 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 			Mode = 'Hold',                 -- 'Hold' | 'Toggle' | 'Always'
 			Name = nil,                    -- имя в keybind list (по умолчанию - название строки)
 			ShowInList = true,
+			AllowModeChange = true,        -- true: ПКМ-меню даёт менять режим; false: в меню только Reset
 			Flag = nil
 		});
 
@@ -2523,6 +2560,15 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 		end;
 
 		local KeybindLib = {};
+		-- клавиша хранится строкой (так её можно сохранить в конфиг), запрещённые клавиши отбрасываем
+		if typeof(Config.Default) == 'EnumItem' then
+			Config.Default = Config.Default.Name;
+		end;
+
+		if NeverLose:IsKeyBlocked(Config.Default) then
+			Config.Default = nil;
+		end;
+
 		local OriginalKey = Config.Default;
 		local OriginalMode = Config.Mode;
 
@@ -2695,7 +2741,7 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 		local function matches(input)
 			local key = keyName();
 
-			if not key or key == 'None' or key == '' then
+			if not key or key == 'None' or key == '' or NeverLose:IsKeyBlocked(key) then
 				return false;
 			end;
 
@@ -2762,7 +2808,7 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 			end;
 
 			local Width , Row = 96 , 22;
-			local Items = { 'Hold' , 'Toggle' , 'Always' , 'Reset' };
+			local Items = Config.AllowModeChange and { 'Hold' , 'Toggle' , 'Always' , 'Reset' } or { 'Reset' };
 			local Buttons = {};
 
 			Menu = Instance.new('Frame');
@@ -2855,6 +2901,7 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 			Divider.Position = UDim2.new(0 , 8 , 0 , 5 + 3 * Row - 1);
 			Divider.Size = UDim2.new(1 , -16 , 0 , 1);
 			Divider.ZIndex = 171;
+			Divider.Visible = Config.AllowModeChange and true or false;
 
 			paint();
 
@@ -2909,9 +2956,11 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 			while not Selected do
 				local Key = UserInputService.InputBegan:Wait();
 
-				if Key.KeyCode == Enum.KeyCode.Backspace then
+				if Key.KeyCode == Enum.KeyCode.Escape then
+					Selected = 'Cancel'; -- Escape = отмена, бинд не меняется
+				elseif Key.KeyCode == Enum.KeyCode.Backspace then
 					Selected = 'None'; -- Backspace = очистить бинд
-				elseif Key.KeyCode ~= Enum.KeyCode.Unknown and not IsBlacklist(Key.KeyCode) and not IsBlacklist(Key.KeyCode.Name) then
+				elseif Key.KeyCode ~= Enum.KeyCode.Unknown and not NeverLose:IsKeyBlocked(Key.KeyCode) and not IsBlacklist(Key.KeyCode) and not IsBlacklist(Key.KeyCode.Name) then
 					Selected = Key.KeyCode;
 				else
 					if Key.UserInputType == Enum.UserInputType.MouseButton1 and not IsBlacklist(Enum.UserInputType.MouseButton1) and not IsBlacklist("M1B") then
@@ -2923,6 +2972,12 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 			end;
 
 			IsBinding = false;
+
+			if Selected == 'Cancel' then
+				ValueLabel.Text = NeverLose:KeyCodeToStr(Config.Default or "None");
+				KeybindLib:Update();
+				return;
+			end;
 
 			local KeyName = typeof(Selected) == "string" and Selected or Selected.Name;
 
@@ -2965,6 +3020,11 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 		NeverLose:AddSignal(BindButton.InputEnded:Connect(function(input)
 			if input.UserInputType == Enum.UserInputType.Touch then
 				PressId += 1;
+
+				-- если после долгого нажатия клик не пришёл, флаг не должен залипнуть
+				task.delay(0.15 , function()
+					LongPressed = false;
+				end);
 			end;
 		end));
 
@@ -2974,6 +3034,14 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 		end;
 
 		function KeybindLib:SetValue(v)
+			if typeof(v) == 'EnumItem' then
+				v = v.Name;
+			end;
+
+			if NeverLose:IsKeyBlocked(v) then
+				v = nil; -- запрещённая клавиша из старого конфига -> пусто
+			end;
+
 			Config.Default = v;
 			ValueLabel.Text = NeverLose:KeyCodeToStr(v or "None");
 			KeybindLib:Update();
@@ -2987,11 +3055,23 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 		end;
 
 		function KeybindLib:Reset()
+			if IsBinding then
+				return;
+			end;
+
+			closeMenu();
+
+			-- клавиша и режим возвращаются к тем, что были заданы при создании
 			Config.Default = OriginalKey;
 			ValueLabel.Text = NeverLose:KeyCodeToStr(OriginalKey or "None");
 			KeybindLib:Update();
-			KeybindLib:SetMode(OriginalMode);
-			Config.Callback(keyName() or 'None');
+
+			KeybindLib.Mode = OriginalMode;
+			KeybindLib.Active = (OriginalMode == 'Always');
+
+			fireChanged(); -- обновляет keybind list
+			task.spawn(Config.StateCallback , KeybindLib.Active);
+			task.spawn(Config.Callback , OriginalKey or 'None');
 		end;
 
 		if Config.Flag then
@@ -4310,25 +4390,16 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 			Name = 'Playerlist',
 			Height = 260,
 			Flag = nil,
-			Callback = EmptyFunction,       -- (player, priority)
+			Callback = EmptyFunction,       -- (player, whitelisted)
 			SelectCallback = EmptyFunction, -- (player or nil)
 		});
 
 		local Z = LayerIndex + 9;
 		local PlayerList = {};
-		local Priorities = {
-			{ Name = 'Neutral'   , Color = Color3.fromRGB(190, 195, 205) },
-			{ Name = 'Friend'    , Color = Color3.fromRGB(95 , 214, 130) },
-			{ Name = 'Enemy'     , Color = Color3.fromRGB(240, 90 , 90 ) },
-			{ Name = 'Whitelist' , Color = Color3.fromRGB(245, 200, 80 ) },
-		};
-		local PriorityColor = {};
+		local WhitelistColor = Color3.fromRGB(245 , 200 , 80);
+		local NeutralColor = Color3.fromRGB(190 , 195 , 205);
 
-		for _ , v in next , Priorities do
-			PriorityColor[v.Name] = v.Color;
-		end;
-
-		local PriorityMap = {};  -- [UserId string] = priority name
+		local PriorityMap = {};  -- [UserId string] = 'Whitelist'
 		local Rows = {};         -- [Player] = row table
 		local Selected = nil;
 		local Search = '';
@@ -4529,7 +4600,11 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 				return NeverLose.AccentColor;
 			end;
 
-			return PriorityColor[name] or PriorityColor.Neutral;
+			if name == 'Whitelist' then
+				return WhitelistColor;
+			end;
+
+			return NeutralColor;
 		end;
 
 		local function matchesSearch(player)
@@ -4541,24 +4616,28 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 				or string.find(string.lower(player.DisplayName) , Search , 1 , true) ~= nil;
 		end;
 
-		local function updateButtons()
-			local current = Selected and getPriorityName(Selected);
-			local locked = (Selected == nil) or (Selected == LocalPlayer);
+		local Viewing = nil;
 
-			for _ , b in next , PriorityButtons do
-				local active = (b.Name == current);
+		local function updateButtons()
+			local locked = (Selected == nil) or (Selected == LocalPlayer);
+			local whitelisted = (Selected ~= nil) and getPriorityName(Selected) == 'Whitelist';
+			local viewing = (Selected ~= nil) and Viewing == Selected;
+
+			for name , b in next , PriorityButtons do
+				local active = (name == 'Whitelist' and whitelisted) or (name == 'View' and viewing);
+				local color = (name == 'Whitelist') and WhitelistColor or NeverLose.AccentColor;
 
 				NeverLose.PlayAnimate(b.Button , SlowyTween , {
-					BackgroundColor3 = active and b.Color or Color3.fromRGB(10 , 13 , 21),
+					BackgroundColor3 = active and color or Color3.fromRGB(10 , 13 , 21),
 					BackgroundTransparency = active and 0.7 or 0,
 				});
 
 				NeverLose.PlayAnimate(b.Stroke , SlowyTween , {
-					Color = active and b.Color or Color3.fromRGB(45 , 48 , 58),
+					Color = active and color or Color3.fromRGB(45 , 48 , 58),
 					Transparency = active and 0.3 or 0.65,
 				});
 
-				b.Button.TextColor3 = active and b.Color or Color3.fromRGB(190 , 195 , 205);
+				b.Button.TextColor3 = active and color or Color3.fromRGB(190 , 195 , 205);
 				b.Button.TextTransparency = locked and 0.7 or 0.1;
 			end;
 		end;
@@ -4651,21 +4730,17 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 			return getPriorityName(player);
 		end;
 
-		function PlayerList:SetPriority(player , priority)
+		function PlayerList:SetWhitelisted(player , value)
 			if typeof(player) ~= 'Instance' or player == LocalPlayer then
-				return;
-			end;
-
-			if not PriorityColor[priority] then
 				return;
 			end;
 
 			local key = tostring(player.UserId);
 
-			if priority == 'Neutral' then
-				PriorityMap[key] = nil;
+			if value then
+				PriorityMap[key] = 'Whitelist';
 			else
-				PriorityMap[key] = priority;
+				PriorityMap[key] = nil;
 			end;
 
 			updateRow(player);
@@ -4674,20 +4749,116 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 				updateInfo();
 			end;
 
-			task.spawn(Config.Callback , player , priority);
+			task.spawn(Config.Callback , player , value and true or false);
+		end;
+
+		function PlayerList:SetPriority(player , priority) -- совместимость со старым API
+			PlayerList:SetWhitelisted(player , priority == 'Whitelist');
 		end;
 
 		function PlayerList:IsWhitelisted(player)
 			return getPriorityName(player) == 'Whitelist';
 		end;
 
-		function PlayerList:IsFriend(player)
-			return getPriorityName(player) == 'Friend';
+		function PlayerList:GetWhitelisted()
+			return PlayerList:GetByPriority('Whitelist');
 		end;
 
-		function PlayerList:IsEnemy(player)
-			return getPriorityName(player) == 'Enemy';
+		---------------------------------------------------------- teleport / view
+		local ViewConn = nil;
+
+		local function stopView()
+			if ViewConn then
+				ViewConn:Disconnect();
+				ViewConn = nil;
+			end;
+
+			Viewing = nil;
+
+			local cam = workspace.CurrentCamera;
+			local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass('Humanoid');
+
+			if cam and hum then
+				cam.CameraSubject = hum;
+			end;
+
+			updateButtons();
 		end;
+
+		function PlayerList:Teleport(player)
+			player = player or Selected;
+
+			if typeof(player) ~= 'Instance' or player == LocalPlayer then
+				return false;
+			end;
+
+			local mine = LocalPlayer.Character;
+			local theirs = player.Character;
+
+			if not mine or not theirs then
+				return false;
+			end;
+
+			mine:PivotTo(theirs:GetPivot() * CFrame.new(0 , 0 , 3));
+
+			return true;
+		end;
+
+		function PlayerList:View(player)
+			player = player or Selected;
+
+			if typeof(player) ~= 'Instance' or player == LocalPlayer then
+				return false;
+			end;
+
+			if Viewing == player then
+				stopView(); -- повторное нажатие выключает просмотр
+				return true;
+			end;
+
+			local cam = workspace.CurrentCamera;
+			local hum = player.Character and player.Character:FindFirstChildOfClass('Humanoid');
+
+			if not cam or not hum then
+				return false;
+			end;
+
+			if ViewConn then
+				ViewConn:Disconnect();
+				ViewConn = nil;
+			end;
+
+			Viewing = player;
+			cam.CameraSubject = hum;
+
+			ViewConn = NeverLose:AddSignal(player.CharacterAdded:Connect(function(char)
+				local h = char:WaitForChild('Humanoid' , 5);
+
+				if h and Viewing == player and workspace.CurrentCamera then
+					workspace.CurrentCamera.CameraSubject = h;
+				end;
+			end));
+
+			updateButtons();
+
+			return true;
+		end;
+
+		function PlayerList:Unview()
+			if Viewing then
+				stopView();
+			end;
+		end;
+
+		function PlayerList:GetViewing()
+			return Viewing;
+		end;
+
+		NeverLose:AddSignal(LocalPlayer.CharacterAdded:Connect(function()
+			if Viewing then
+				stopView();
+			end;
+		end));
 
 		function PlayerList:GetByPriority(priority)
 			local out = {};
@@ -4719,7 +4890,7 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 			table.clear(PriorityMap);
 
 			for k , v in next , data do
-				if PriorityColor[v] and v ~= 'Neutral' then
+				if v == 'Whitelist' then
 					PriorityMap[tostring(k)] = v;
 				end;
 			end;
@@ -4731,15 +4902,21 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 			updateInfo();
 		end;
 
-		----------------------------------------------------------------- priority buttons
-		for i , p in next , Priorities do
+		----------------------------------------------------------------- buttons
+		local PanelButtons = {
+			{ Name = 'Whitelist' , Action = function(pl) PlayerList:SetWhitelisted(pl , getPriorityName(pl) ~= 'Whitelist'); end },
+			{ Name = 'Teleport'  , Action = function(pl) PlayerList:Teleport(pl); end },
+			{ Name = 'View'      , Action = function(pl) PlayerList:View(pl); end },
+		};
+
+		for i , item in next , PanelButtons do
 			local Button = make('TextButton' , {
 				AutoButtonColor = false,
 				BackgroundColor3 = Color3.fromRGB(10 , 13 , 21),
-				Size = UDim2.new(0.25 , -3 , 1 , 0),
+				Size = UDim2.new(1 / 3 , -3 , 1 , 0),
 				ZIndex = Z + 2,
 				Font = Enum.Font.GothamMedium,
-				Text = p.Name,
+				Text = item.Name,
 				TextColor3 = Color3.fromRGB(190 , 195 , 205),
 				TextSize = 11,
 				LayoutOrder = i,
@@ -4747,18 +4924,14 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 
 			corner(Button , 6);
 
-			local Stroke = stroke(Button);
-
-			table.insert(PriorityButtons , {
-				Name = p.Name,
-				Color = p.Color,
+			PriorityButtons[item.Name] = {
 				Button = Button,
-				Stroke = Stroke,
-			});
+				Stroke = stroke(Button),
+			};
 
 			NeverLose:AddSignal(Button.MouseButton1Click:Connect(function()
 				if Selected and Selected ~= LocalPlayer then
-					PlayerList:SetPriority(Selected , p.Name);
+					item.Action(Selected);
 				end;
 			end));
 		end;
@@ -4855,6 +5028,10 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 				PlayerList:Select(nil);
 			end;
 
+			if Viewing == player then
+				stopView();
+			end;
+
 			Rows[player] = nil;
 			row.Button:Destroy();
 		end;
@@ -4919,6 +5096,7 @@ function NeverLose:CreateWindow(Config)
 	};
 
 	NeverLose.GlobalLogo = Window.Logo;
+	NeverLose.CurrentWindow = Window;
 
 	local Logging = NeverLose:CreateLogger();
 	if not isfolder(Window.ConfigFolder) then
