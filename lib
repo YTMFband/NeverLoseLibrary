@@ -1956,32 +1956,13 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 			Nums = {},
 			Flag = nil,
 			Size = 125,
-			Name = "",
 			Callback = EmptyFunction,
 		});
 
 		local SliderLib = {};
 
-		-- layout (px): title row 0..16, track centre at 29, total height 42
-		local TITLE_H = 16;
-		local TRACK_Y = 26;
-		local TRACK_H = 6;
-		local KNOB = 12;
-		local TOTAL_H = 42;
-		local BOX_PAD = 10;
-
-		local function Clamp(v)
-			return math.clamp(v, Config.Min, Config.Max);
-		end;
-
 		SliderLib.GetSize = LPH_NO_VIRTUALIZE(function()
-			local range = Config.Max - Config.Min;
-
-			if range <= 0 then
-				return 0;
-			end;
-
-			return math.clamp((Config.Default - Config.Min) / range, 0, 1);
+			return (Config.Default - Config.Min) / (Config.Max - Config.Min);
 		end);
 
 		local FullNumSize = NeverLose.GetTextSize(string.rep("0",(Config.Rounding + #tostring(Config.Max))+1)..tostring(Config.Type),10,Enum.Font.GothamMedium,Vector2.new(math.huge,math.huge));
@@ -2004,56 +1985,44 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 			end;
 		end;
 
-		local BoxW = SliderLib.MaximumSize + BOX_PAD;
-
 		local Slider = Instance.new("Frame")
-		local TitleLabel = Instance.new("TextLabel")
+		local UICorner = Instance.new("UICorner")
 		local ValueFrame = Instance.new("Frame")
 		local UICorner_2 = Instance.new("UICorner")
 		local UIStroke = Instance.new("UIStroke")
 		local ValueLabel = Instance.new("TextBox")
 		local SlideMain = Instance.new("Frame")
+		local SlideFrame = Instance.new("Frame")
 		local UICorner_3 = Instance.new("UICorner")
 		local SlideMoving = Instance.new("Frame")
 		local UICorner_4 = Instance.new("UICorner")
-		local Knob = Instance.new("Frame")
+		local Frame = Instance.new("Frame")
 		local UICorner_5 = Instance.new("UICorner")
-		local SlideHit = Instance.new("Frame")
+		local boxSize = 2;
 
 		Slider.Name = NeverLose.RandomString();
 		Slider.Parent = Handler
-		Slider.BackgroundTransparency = 1
+		Slider.BackgroundColor3 = Color3.fromRGB(26, 28, 36)
+		Slider.BackgroundTransparency = 1.000
+		Slider.BorderColor3 = Color3.fromRGB(0, 0, 0)
 		Slider.BorderSizePixel = 0
 		Slider.ClipsDescendants = false
-		Slider.Size = UDim2.new(1, 0, 0, TOTAL_H)
+		Slider.Size = UDim2.new(0, Config.Size, 0, 18)
 		Slider.ZIndex = ZINdex + 13
 		Slider.LayoutOrder = -(#Handler:GetChildren() + 5);
 
-		TitleLabel.Name = NeverLose.RandomString();
-		TitleLabel.Parent = Slider
-		TitleLabel.BackgroundTransparency = 1
-		TitleLabel.BorderSizePixel = 0
-		TitleLabel.Position = UDim2.new(0, 0, 0, 0)
-		TitleLabel.Size = UDim2.new(1, -(BoxW + 8), 0, TITLE_H)
-		TitleLabel.ZIndex = ZINdex + 13
-		TitleLabel.Font = Enum.Font.GothamMedium
-		TitleLabel.Text = tostring(Config.Name)
-		TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-		TitleLabel.TextSize = 12
-		TitleLabel.TextTransparency = 0.350
-		TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
-		TitleLabel.TextYAlignment = Enum.TextYAlignment.Center
-		TitleLabel.TextTruncate = Enum.TextTruncate.AtEnd
-		TitleLabel.ClipsDescendants = true
+		UICorner.CornerRadius = UDim.new(0, 4)
+		UICorner.Parent = Slider
 
 		ValueFrame.Name = NeverLose.RandomString();
 		ValueFrame.Parent = Slider
 		ValueFrame.AnchorPoint = Vector2.new(1, 0)
 		ValueFrame.BackgroundColor3 = Color3.fromRGB(26, 28, 36)
+		ValueFrame.BorderColor3 = Color3.fromRGB(0, 0, 0)
 		ValueFrame.BorderSizePixel = 0
 		ValueFrame.ClipsDescendants = true
 		ValueFrame.Position = UDim2.new(1, 0, 0, 0)
-		ValueFrame.Size = UDim2.new(0, BoxW, 0, TITLE_H)
+		ValueFrame.Size = UDim2.new(0, SliderLib.MaximumSize + boxSize, 0, 18)
 		ValueFrame.ZIndex = ZINdex + 13
 
 		UICorner_2.CornerRadius = UDim.new(0, 4)
@@ -2066,7 +2035,9 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 		ValueLabel.Name = NeverLose.RandomString();
 		ValueLabel.Parent = ValueFrame
 		ValueLabel.AnchorPoint = Vector2.new(0.5, 0.5)
-		ValueLabel.BackgroundTransparency = 1
+		ValueLabel.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+		ValueLabel.BackgroundTransparency = 1.000
+		ValueLabel.BorderColor3 = Color3.fromRGB(0, 0, 0)
 		ValueLabel.BorderSizePixel = 0
 		ValueLabel.Position = UDim2.new(0.5, 0, 0.5, 0)
 		ValueLabel.Size = UDim2.new(1, 0, 1, 0)
@@ -2074,25 +2045,38 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 		ValueLabel.Font = Enum.Font.GothamMedium
 		ValueLabel.Text = tostring(Config.Default)..tostring(Config.Type);
 		ValueLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-		ValueLabel.TextSize = 10
+		ValueLabel.TextSize = 10.000
 		ValueLabel.ClearTextOnFocus = false;
 		ValueLabel.TextTransparency = 0.350
 
-		-- track background; 6px narrower than the row so the knob never leaves it
 		SlideMain.Name = NeverLose.RandomString();
 		SlideMain.Parent = Slider
-		SlideMain.BackgroundColor3 = Color3.fromRGB(30, 29, 36)
+		SlideMain.AnchorPoint = Vector2.new(0, 0.5)
+		SlideMain.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+		SlideMain.BackgroundTransparency = 1.000
+		SlideMain.BorderColor3 = Color3.fromRGB(0, 0, 0)
 		SlideMain.BorderSizePixel = 0
-		SlideMain.Position = UDim2.new(0, 0, 0, TRACK_Y)
-		SlideMain.Size = UDim2.new(1, -KNOB / 2, 0, TRACK_H)
+		SlideMain.Position = UDim2.new(0, 0, 0.5, 0)
+		SlideMain.Size = UDim2.new(1, -((SliderLib.MaximumSize + 11)), 0, 18)
 		SlideMain.ZIndex = ZINdex + 13
 
+		SlideFrame.Name = NeverLose.RandomString();
+		SlideFrame.Parent = SlideMain
+		SlideFrame.AnchorPoint = Vector2.new(0, 0.5)
+		SlideFrame.BackgroundColor3 = Color3.fromRGB(30, 29, 36)
+		SlideFrame.BorderColor3 = Color3.fromRGB(0, 0, 0)
+		SlideFrame.BorderSizePixel = 0
+		SlideFrame.Position = UDim2.new(0, 0, 0.5, 0)
+		SlideFrame.Size = UDim2.new(1, 0, 0, 5)
+		SlideFrame.ZIndex = ZINdex + 13
+
 		UICorner_3.CornerRadius = UDim.new(1, 0)
-		UICorner_3.Parent = SlideMain
+		UICorner_3.Parent = SlideFrame
 
 		SlideMoving.Name = NeverLose.RandomString();
-		SlideMoving.Parent = SlideMain
+		SlideMoving.Parent = SlideFrame
 		SlideMoving.BackgroundColor3 = NeverLose.AccentColor
+		SlideMoving.BorderColor3 = Color3.fromRGB(0, 0, 0)
 		SlideMoving.BorderSizePixel = 0
 		SlideMoving.Size = UDim2.new(SliderLib.GetSize(), 0, 1, 0)
 		SlideMoving.ZIndex = ZINdex + 14
@@ -2100,41 +2084,33 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 		UICorner_4.CornerRadius = UDim.new(1, 0)
 		UICorner_4.Parent = SlideMoving
 
-		Knob.Name = NeverLose.RandomString();
-		Knob.Parent = SlideMoving
-		Knob.AnchorPoint = Vector2.new(1, 0.5)
-		Knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-		Knob.BorderSizePixel = 0
-		Knob.Position = UDim2.new(1, 0, 0.5, 0)
-		Knob.Size = UDim2.new(0, KNOB, 0, KNOB)
-		Knob.ZIndex = ZINdex + 15
+		Frame.Parent = SlideMoving
+		Frame.AnchorPoint = Vector2.new(1, 0.5)
+		Frame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+		Frame.BorderColor3 = Color3.fromRGB(0, 0, 0)
+		Frame.BorderSizePixel = 0
+		Frame.Position = UDim2.new(1, 5, 0.5, 0)
+		Frame.Size = UDim2.new(0, 10, 0, 10)
+		Frame.ZIndex = ZINdex + 15
 
 		UICorner_5.CornerRadius = UDim.new(1, 0)
-		UICorner_5.Parent = Knob
-
-		-- invisible, taller hit area so the slider is easy to grab
-		SlideHit.Name = NeverLose.RandomString();
-		SlideHit.Parent = Slider
-		SlideHit.Active = true
-		SlideHit.BackgroundTransparency = 1
-		SlideHit.BorderSizePixel = 0
-		SlideHit.Position = UDim2.new(0, 0, 0, TRACK_Y - 6)
-		SlideHit.Size = UDim2.new(1, -KNOB / 2, 0, TRACK_H + 12)
-		SlideHit.ZIndex = ZINdex + 16
+		UICorner_5.Parent = Frame
 
 		local LoadText = LPH_NO_VIRTUALIZE(function()
 			if Config.Nums[Config.Default] then
 				ValueLabel.Text = Config.Nums[Config.Default]
+
 			else
 				ValueLabel.Text = tostring(Config.Default)..tostring(Config.Type);
+
 			end;
 		end);
 
 		ValueLabel.FocusLost:Connect(LPH_NO_VIRTUALIZE(function()
 			local OutVal = NeverLose:ParseInput(ValueLabel.Text , true);
-
 			if OutVal then
-				local Value = NeverLose.Rounding(Clamp(OutVal),Config.Rounding);
+				local rx = math.clamp(OutVal , Config.Min , Config.Max);
+				local Value = NeverLose.Rounding(rx,Config.Rounding);
 
 				if Value then
 					Config.Default = Value;
@@ -2149,6 +2125,7 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 				else
 					LoadText();
 				end;
+
 			else
 				LoadText()
 			end;
@@ -2156,21 +2133,56 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 
 		SliderLib.SetRender = LPH_NO_VIRTUALIZE(function(value)
 			if value then
-				NeverLose.PlayAnimate(ValueFrame,SlowyTween,{ BackgroundTransparency = 0 });
-				NeverLose.PlayAnimate(UIStroke,SlowyTween,{ Transparency = 0.650 });
-				NeverLose.PlayAnimate(ValueLabel,SlowyTween,{ TextTransparency = 0.350 });
-				NeverLose.PlayAnimate(TitleLabel,SlowyTween,{ TextTransparency = 0.350 });
-				NeverLose.PlayAnimate(SlideMain,SlowyTween,{ BackgroundTransparency = 0 });
-				NeverLose.PlayAnimate(SlideMoving,SlowyTween,{ BackgroundTransparency = 0, Size = UDim2.new(SliderLib.GetSize(), 0, 1, 0) });
-				NeverLose.PlayAnimate(Knob,SlowyTween,{ BackgroundTransparency = 0 });
+				NeverLose.PlayAnimate(ValueFrame,SlowyTween,{
+					BackgroundTransparency = 0,
+					Size = UDim2.new(0, SliderLib.MaximumSize + boxSize, 0, 18)
+				});
+
+				NeverLose.PlayAnimate(UIStroke,SlowyTween,{
+					Transparency = 0.650
+				});
+
+				NeverLose.PlayAnimate(ValueLabel,SlowyTween,{
+					TextTransparency = 0.350
+				});
+
+				NeverLose.PlayAnimate(SlideFrame,SlowyTween,{
+					BackgroundTransparency = 0
+				});
+
+				NeverLose.PlayAnimate(SlideMoving,SlowyTween,{
+					BackgroundTransparency = 0,
+					Size = UDim2.new(SliderLib.GetSize(), 0, 1, 0)
+				});
+
+				NeverLose.PlayAnimate(Frame,SlowyTween,{
+					BackgroundTransparency = 0
+				});
 			else
-				NeverLose.PlayAnimate(ValueFrame,SlowyTween,{ BackgroundTransparency = 1 });
-				NeverLose.PlayAnimate(UIStroke,SlowyTween,{ Transparency = 1 });
-				NeverLose.PlayAnimate(ValueLabel,SlowyTween,{ TextTransparency = 1 });
-				NeverLose.PlayAnimate(TitleLabel,SlowyTween,{ TextTransparency = 1 });
-				NeverLose.PlayAnimate(SlideMain,SlowyTween,{ BackgroundTransparency = 1 });
-				NeverLose.PlayAnimate(SlideMoving,SlowyTween,{ BackgroundTransparency = 1, Size = UDim2.new(0, 0, 1, 0) });
-				NeverLose.PlayAnimate(Knob,SlowyTween,{ BackgroundTransparency = 1 });
+				NeverLose.PlayAnimate(ValueFrame,SlowyTween,{
+					BackgroundTransparency = 1,
+				});
+
+				NeverLose.PlayAnimate(UIStroke,SlowyTween,{
+					Transparency = 1
+				});
+
+				NeverLose.PlayAnimate(ValueLabel,SlowyTween,{
+					TextTransparency = 1
+				});
+
+				NeverLose.PlayAnimate(SlideFrame,SlowyTween,{
+					BackgroundTransparency = 1
+				});
+
+				NeverLose.PlayAnimate(SlideMoving,SlowyTween,{
+					BackgroundTransparency = 1,
+					Size = UDim2.new(0, 0, 1, 0)
+				});
+
+				NeverLose.PlayAnimate(Frame,SlowyTween,{
+					BackgroundTransparency = 1
+				});
 			end;
 		end);
 
@@ -2178,39 +2190,59 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 		SliderLib.Signal = Signal:Connect(SliderLib.SetRender);
 
 		local Update = function(Input)
-			local SizeScale = math.clamp((Input.Position.X - SlideMain.AbsolutePosition.X) / SlideMain.AbsoluteSize.X, 0, 1);
-			local Value = NeverLose.Rounding((Config.Max - Config.Min) * SizeScale + Config.Min, Config.Rounding);
+			local SizeScale = math.clamp((((Input.Position.X) - SlideMain.AbsolutePosition.X) / SlideMain.AbsoluteSize.X), 0, 1);
+			local Main = ((Config.Max - Config.Min) * SizeScale) + Config.Min;
+			local Value = NeverLose.Rounding(Main,Config.Rounding);
+			local PositionX = UDim2.fromScale(SizeScale, 1);
+			local Size = ((Value - Config.Min) / (Config.Max - Config.Min)) + 0.02;
 
-			Config.Default = Clamp(Value);
+			Config.Default = Value;
 
 			TweenService:Create(SlideMoving , ManualTween ,{
 				Size = UDim2.new(SliderLib.GetSize(), 0, 1, 0)
 			}):Play();
 
-			LoadText();
+			LoadText()
 
-			Config.Callback(Config.Default);
+
+			Config.Callback(Value)
 		end;
 
 		local IsHold = false;
 
 		do
-			SlideHit.InputBegan:Connect(LPH_NO_VIRTUALIZE(function(Input)
+			SlideMain.InputBegan:Connect(LPH_NO_VIRTUALIZE(function(Input)
 				if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
-					IsHold = true;
-					Update(Input);
-				end;
-			end));
+					IsHold = true
+					Update(Input)
+				end
+			end))
 
-			SlideHit.InputEnded:Connect(LPH_NO_VIRTUALIZE(function(Input)
+			SlideMain.InputEnded:Connect(LPH_NO_VIRTUALIZE(function(Input)
 				if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
-					IsHold = false;
-				end;
-			end));
+					if UserInputService.TouchEnabled then
+						if not NeverLose:IsMouseOverFrame(SlideMain) then
+							IsHold = false
+						end;
+					else
+						IsHold = false
+					end;
+				end
+			end))
 
 			NeverLose:AddSignal(UserInputService.InputChanged:Connect(LPH_NO_VIRTUALIZE(function(Input)
-				if IsHold and (Input.UserInputType == Enum.UserInputType.MouseMovement or Input.UserInputType == Enum.UserInputType.Touch) then
-					Update(Input);
+				if IsHold then
+					if (Input.UserInputType == Enum.UserInputType.MouseMovement or Input.UserInputType == Enum.UserInputType.Touch)  then
+						if UserInputService.TouchEnabled then
+							if not NeverLose:IsMouseOverFrame(SlideMain) then
+								IsHold = false
+							else
+								Update(Input)
+							end;
+						else
+							Update(Input)
+						end;
+					end;
 				end;
 			end)));
 		end;
@@ -2220,7 +2252,7 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 		end;
 
 		function SliderLib:SetValue(v)
-			Config.Default = Clamp(v);
+			Config.Default = v;
 
 			if Signal:GetValue() then
 				NeverLose.PlayAnimate(SlideMoving,SlowyTween,{
@@ -2229,7 +2261,7 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 				});
 			end;
 
-			LoadText();
+			LoadText()
 
 			Config.Callback(Config.Default);
 		end;
@@ -3909,21 +3941,6 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 		end;
 
 		return UserFrameItem;
-	end;
-
-	function idx:AddSlider(Config)
-		local Row = Instance.new("Frame")
-		Row.Name = NeverLose.RandomString();
-		Row.Parent = Frame
-		Row.BackgroundTransparency = 1
-		Row.BorderSizePixel = 0
-		Row.Size = UDim2.new(1, -22, 0, 42)
-		Row.ZIndex = LayerIndex + 9
-		Row.LayoutOrder = -(#Frame:GetChildren() + 5);
-
-		local Handle = NeverLose:RegisiterHandler(Row, Signel)
-
-		return Handle:AddSlider(Config)
 	end;
 
 	return idx;
