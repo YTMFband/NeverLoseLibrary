@@ -2780,6 +2780,7 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 		local Menu = nil;
 		local MenuConn = nil;
 		local ClosedAt = 0;
+		local FlagsHeld = false;
 
 		local function closeMenu(byOutside)
 			if MenuConn then
@@ -2790,6 +2791,13 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 			if Menu then
 				Menu:Destroy();
 				Menu = nil;
+			end;
+
+			-- отпускаем флаги: теперь окно настроек снова может закрываться кликом снаружи
+			if FlagsHeld then
+				FlagsHeld = false;
+				NeverLose.IsDropdownOn = false;
+				NeverLose.IsMosueOverOtherFrame = false;
 			end;
 
 			if byOutside then
@@ -2819,6 +2827,11 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 			Menu.BorderSizePixel = 0;
 			Menu.Size = UDim2.new(0 , Width , 0 , #Items * Row + 10);
 			Menu.ZIndex = 170;
+
+			-- пока меню открыто, окно настроек (шестерёнка) не должно закрываться от клика по нашему меню
+			FlagsHeld = true;
+			NeverLose.IsDropdownOn = true;
+			NeverLose.IsMosueOverOtherFrame = true;
 
 			local abs , size = Keybind.AbsolutePosition , Keybind.AbsoluteSize;
 			local view = CurrentCamera.ViewportSize;
