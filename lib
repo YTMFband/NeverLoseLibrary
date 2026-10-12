@@ -2549,7 +2549,7 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 			Mode = 'Hold',                 -- 'Hold' | 'Toggle' | 'Always'
 			Name = nil,                    -- имя в keybind list (по умолчанию - название строки)
 			ShowInList = true,
-			MobileButton = true,           -- экранная кнопка на телефоне
+			MobileButton = false,          -- true: создать экранную кнопку для этого бинда
 			MobileSize = nil,              -- Vector2: свой размер кнопки
 			MobileCorner = nil,            -- число: своё закругление кнопки
 			AllowModeChange = true,        -- true: ПКМ-меню даёт менять режим; false: в меню только Reset
@@ -3152,7 +3152,7 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 		-- экранная кнопка для телефона
 		KeybindLib.MobileButton = nil;
 
-		if Config.MobileButton ~= false then
+		if Config.MobileButton == true then
 			KeybindLib.MobileButton = NeverLose:AddMobileButton(KeybindLib , {
 				Size = Config.MobileSize,
 				Corner = Config.MobileCorner,
@@ -8624,6 +8624,9 @@ NeverLose.MobileConfig = NeverLose.MobileConfig or {
 	MenuButton = true,
 	MenuButtonSize = 40,
 	MenuButtonCorner = 20,             -- >= размер / 2 = круг
+	MenuButtonIcon = 'N',              -- 'N' (текст) | 'icon:menu' (иконка библиотеки) | 'rbxassetid://123' или 123 (картинка)
+	MenuButtonIconScale = 0.55,        -- размер иконки относительно кнопки (0..1)
+	MenuButtonIconColor = nil,         -- Color3: цвет иконки/текста (nil = белый, картинка без окраски)
 	ShowFunctionButtons = true,
 	ButtonSize = Vector2.new(76 , 40),
 	ButtonCorner = 8,
@@ -8755,16 +8758,28 @@ do
 		end;
 
 		for _ , b in next , Mobile.Buttons do
-			b.Gui.Visible = showFns and b.Source.Mode ~= 'Always';
+			b.Gui.Visible = showFns and (Mobile.Edit or not b.Hidden) and b.Source.Mode ~= 'Always';
 			b.Stroke.Thickness = Mobile.Edit and 1.5 or 1;
 			b.Stroke.Color = Mobile.Edit and Color3.fromRGB(190 , 195 , 205) or (b.Source:GetState() and NeverLose.AccentColor or Color3.fromRGB(45 , 48 , 58));
 		end;
 	end;
 
 	----------------------------------------------------------------- function buttons: style / position / paint
+	local function sizeOf(b)
+		local v = b.Opts.Size or Cfg().ButtonSize;
+
+		if type(v) == 'number' then
+			return Vector2.new(v , v);
+		elseif type(v) == 'table' then
+			return Vector2.new(v[1] or v.X or v.Width or 76 , v[2] or v.Y or v.Height or 40);
+		end;
+
+		return v;
+	end;
+
 	local function styleButton(b)
 		local c = Cfg();
-		local size = b.Opts.Size or c.ButtonSize;
+		local size = sizeOf(b);
 		local corner = b.Opts.Corner or c.ButtonCorner;
 		local nameSize = math.clamp(math.floor(size.Y * 0.30) , 9 , 18);
 
@@ -8778,7 +8793,7 @@ do
 
 	local function positionButton(b)
 		local c = Cfg();
-		local size = b.Opts.Size or c.ButtonSize;
+		local size = sizeOf(b);
 		local saved = Mobile.Layout[b.Key];
 
 		b.Gui.AnchorPoint = Vector2.new(0.5 , 0.5);
@@ -8808,6 +8823,88 @@ do
 		b.Gui.Visible = b.Gui.Visible and b.Source.Mode ~= 'Always';
 	end;
 
+	-- показ кнопки по значению элемента (ShowWhen): тогл, дропдаун, Flag-строка
+	local Watch = {};
+	local WatchLoop = false;
+
+	local function readShowWhen(b)
+		local el = b.ShowWhen;
+
+		if type(el) == 'string' then
+			el = NeverLose.Flags[el];
+		end;
+
+		if type(el) ~= 'table' or type(el.GetValue) ~= 'function' then
+			return true;
+		end;
+
+		local ok , cur = pcall(el.GetValue , el);
+
+		if not ok then
+			return true;
+		end;
+
+		local want = b.ShowValue;
+
+		if type(want) == 'function' then
+			local ok2 , r = pcall(want , cur);
+			return ok2 and r and true or false;
+		end;
+
+		if type(cur) == 'table' then
+			return cur[want] == true or table.find(cur , want) ~= nil;
+		end;
+
+		return cur == want;
+	end;
+
+	local function onHidden(b)
+		if b.ResetOnHide and b.Source.SetState then
+			b.Source:SetState(false);
+		end;
+	end;
+
+	local function startWatch()
+		if WatchLoop then
+			return;
+		end;
+
+		WatchLoop = true;
+
+		task.spawn(function()
+			while #Watch > 0 do
+				task.wait(0.1);
+
+				local changed = false;
+
+				for i = #Watch , 1 , -1 do
+					local b = Watch[i];
+
+					if not b.Gui or not b.Gui.Parent then
+						table.remove(Watch , i);
+					else
+						local hidden = not readShowWhen(b);
+
+						if hidden ~= b.Hidden then
+							b.Hidden = hidden;
+							changed = true;
+
+							if hidden then
+								onHidden(b);
+							end;
+						end;
+					end;
+				end;
+
+				if changed then
+					Mobile:Refresh();
+				end;
+			end;
+
+			WatchLoop = false;
+		end);
+	end;
+
 	function NeverLose:AddMobileButton(source , opts)
 		opts = opts or {};
 
@@ -8817,7 +8914,17 @@ do
 			Source = source,
 			Opts = opts,
 			Key = opts.Key or source.Name or 'Keybind',
+			Hidden = (opts.Visible == false),
+			ShowWhen = opts.ShowWhen,
+			ShowValue = (opts.ShowValue == nil) and true or opts.ShowValue,
+			ResetOnHide = (opts.ResetOnHide ~= false),
 		};
+
+		if b.ShowWhen ~= nil then
+			b.Hidden = not readShowWhen(b);
+			table.insert(Watch , b);
+			startWatch();
+		end;
 
 		local Gui = Instance.new('TextButton');
 		local Corner = Instance.new('UICorner');
@@ -8904,7 +9011,7 @@ do
 			end
 		);
 
-		NeverLose:AddSignal(source.Changed:Connect(function()
+		b.Conn = NeverLose:AddSignal(source.Changed:Connect(function()
 			paintButton(b);
 			Mobile:Refresh();
 		end));
@@ -8920,7 +9027,152 @@ do
 			styleButton(b);
 		end;
 
+		function b:GetSize()
+			return sizeOf(b);
+		end;
+
+		-- показать / скрыть кнопку вручную (например из Callback тогла); отключает ShowWhen
+		function b:SetVisible(v)
+			local i = table.find(Watch , b);
+
+			if i then
+				table.remove(Watch , i);
+			end;
+
+			b.ShowWhen = nil;
+			b.Hidden = not v;
+
+			if b.Hidden then
+				onHidden(b);
+			end;
+
+			Mobile:Refresh();
+		end;
+
+		function b:IsVisible()
+			return not b.Hidden;
+		end;
+
+		function b:GetState()
+			return source:GetState();
+		end;
+
+		function b:SetState(v)
+			if source.SetState then
+				source:SetState(v);
+			end;
+		end;
+
+		function b:SetName(n)
+			if source.SetName then
+				source:SetName(n);
+			end;
+		end;
+
+		function b:Destroy()
+			local i = table.find(Watch , b);
+
+			if i then
+				table.remove(Watch , i);
+			end;
+
+			local j = table.find(Mobile.Buttons , b);
+
+			if j then
+				table.remove(Mobile.Buttons , j);
+			end;
+
+			if b.Conn then
+				b.Conn:Disconnect();
+			end;
+
+			b.Gui:Destroy();
+		end;
+
 		Mobile:Refresh();
+
+		return b;
+	end;
+
+	-- своя экранная кнопка: NeverLose:CreateMobileButton({ Name = 'Fly', Mode = 'Toggle', Callback = function(active) end })
+	function NeverLose:CreateMobileButton(opts)
+		opts = NeverLose:ProcessParams(opts , {
+			Name = 'Button',
+			Mode = 'Toggle',          -- 'Toggle' | 'Hold'
+			Default = false,
+			Visible = true,
+			ShowWhen = nil,           -- элемент (тогл/дропдаун) или имя Flag: кнопка видна, пока значение == ShowValue
+			ShowValue = true,
+			ResetOnHide = true,       -- кнопка скрылась -> состояние выключается (и вызывается Callback(false))
+			Callback = EmptyFunction, -- function(active)
+			Size = nil,               -- Vector2: свой размер
+			Corner = nil,             -- число: своё закругление
+			Flag = nil,               -- ключ для сохранения позиции (по умолчанию Name)
+		});
+
+		local source = {
+			Name = opts.Name,
+			Mode = (opts.Mode == 'Hold') and 'Hold' or 'Toggle',
+			Active = opts.Default and true or false,
+			Changed = NeverLose:CreateSignal(0),
+		};
+
+		local function fire()
+			source.Changed:SetValue(source.Changed:GetValue() + 1);
+		end;
+
+		local function setState(v)
+			v = v and true or false;
+
+			if source.Active == v then
+				return;
+			end;
+
+			source.Active = v;
+			fire();
+			task.spawn(opts.Callback , v);
+		end;
+
+		function source:GetState()
+			return source.Active;
+		end;
+
+		function source:SetState(v)
+			setState(v);
+		end;
+
+		function source:Press()
+			if source.Mode == 'Toggle' then
+				setState(not source.Active);
+			else
+				setState(true);
+			end;
+		end;
+
+		function source:Release()
+			if source.Mode == 'Hold' and source.Active then
+				setState(false);
+			end;
+		end;
+
+		function source:SetName(n)
+			source.Name = n;
+			fire();
+		end;
+
+		local b = NeverLose:AddMobileButton(source , {
+			Size = opts.Size,
+			Corner = opts.Corner,
+			Key = opts.Flag or opts.Name,
+			Visible = opts.Visible,
+			ShowWhen = opts.ShowWhen,
+			ShowValue = opts.ShowValue,
+			ResetOnHide = opts.ResetOnHide,
+		});
+
+		if source.Active then
+			task.spawn(opts.Callback , true);
+		end;
 
 		return b;
 	end;
@@ -8939,13 +9191,58 @@ do
 		Mobile:Refresh();
 	end;
 
+	-- иконка кнопки меню: текст, иконка библиотеки или картинка
+	function Mobile:ApplyMenuIcon()
+		if not MenuBtn then
+			return;
+		end;
+
+		local c = Cfg();
+		local icon = c.MenuButtonIcon;
+		local px = math.max(8 , math.floor(c.MenuButtonSize * (c.MenuButtonIconScale or 0.55)));
+		local color = c.MenuButtonIconColor or Color3.fromRGB(255 , 255 , 255);
+		local imageId = nil;
+
+		if type(icon) == 'number' then
+			imageId = 'rbxassetid://' .. icon;
+		elseif type(icon) == 'string' then
+			if string.match(icon , '^%d+$') then
+				imageId = 'rbxassetid://' .. icon;
+			elseif string.match(icon , '^rbxassetid://') or string.match(icon , '^rbxasset://') or string.match(icon , '^https?://') then
+				imageId = icon;
+			end;
+		end;
+
+		if imageId then
+			MenuBtn.Icon.Visible = false;
+			MenuBtn.Image.Visible = true;
+			MenuBtn.Image.Image = imageId;
+			MenuBtn.Image.ImageColor3 = c.MenuButtonIconColor or Color3.fromRGB(255 , 255 , 255);
+			MenuBtn.Image.Size = UDim2.fromOffset(px , px);
+		else
+			local text = tostring(icon or 'N');
+
+			MenuBtn.Image.Visible = false;
+			MenuBtn.Icon.Visible = true;
+			MenuBtn.Icon.TextColor3 = color;
+			MenuBtn.Icon.TextSize = px;
+
+			if string.sub(text , 1 , 5) == 'icon:' then
+				NeverLose:SetIconMode(MenuBtn.Icon , string.sub(text , 6)); -- иконка библиотеки, '-bold' на конце = жирная
+			else
+				MenuBtn.Icon.Font = Enum.Font.GothamBold;
+				MenuBtn.Icon.Text = text;
+			end;
+		end;
+	end;
+
 	----------------------------------------------------------------- menu button
 	function Mobile:StyleMenuButton()
 		local c = Cfg();
 
 		MenuBtn.Size = UDim2.fromOffset(c.MenuButtonSize , c.MenuButtonSize);
 		MenuBtn.Corner.CornerRadius = UDim.new(0 , math.min(c.MenuButtonCorner , c.MenuButtonSize / 2));
-		MenuBtn.Icon.TextSize = math.floor(c.MenuButtonSize * 0.5);
+		Mobile:ApplyMenuIcon();
 
 		local saved = Mobile.Layout.__menu;
 
@@ -9000,7 +9297,20 @@ do
 		Icon.Text = 'N';
 		Icon.TextColor3 = Color3.fromRGB(255 , 255 , 255);
 
-		MenuBtn = { Gui = Gui , Corner = Corner , Icon = Icon , Stroke = Stroke };
+		local IconImage = Instance.new('ImageLabel');
+
+		IconImage.Name = NeverLose.RandomString();
+		IconImage.Parent = Gui;
+		IconImage.AnchorPoint = Vector2.new(0.5 , 0.5);
+		IconImage.BackgroundTransparency = 1;
+		IconImage.BorderSizePixel = 0;
+		IconImage.Position = UDim2.new(0.5 , 0 , 0.5 , 0);
+		IconImage.Size = UDim2.fromOffset(20 , 20);
+		IconImage.ScaleType = Enum.ScaleType.Fit;
+		IconImage.ZIndex = 164;
+		IconImage.Visible = false;
+
+		MenuBtn = { Gui = Gui , Corner = Corner , Icon = Icon , Image = IconImage , Stroke = Stroke };
 
 		-- MenuBtn используется как таблица; Visible / Size / Position пробрасываем на Gui
 		setmetatable(MenuBtn , {
@@ -9156,6 +9466,23 @@ do
 		c.MenuButtonSize = size or c.MenuButtonSize;
 		c.MenuButtonCorner = corner or c.MenuButtonCorner;
 		Mobile:Restyle();
+	end;
+
+	-- своя иконка: NeverLose:SetMobileMenuIcon('rbxassetid://123') / ('icon:menu') / ('N') ; color необязателен
+	function NeverLose:SetMobileMenuIcon(icon , color , scale)
+		local c = Cfg();
+
+		c.MenuButtonIcon = icon;
+
+		if color ~= nil then
+			c.MenuButtonIconColor = color;
+		end;
+
+		if scale ~= nil then
+			c.MenuButtonIconScale = scale;
+		end;
+
+		Mobile:ApplyMenuIcon();
 	end;
 
 	-- позиции кнопок сохраняются в конфиг
