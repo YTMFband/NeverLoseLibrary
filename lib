@@ -2549,6 +2549,9 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 			Mode = 'Hold',                 -- 'Hold' | 'Toggle' | 'Always'
 			Name = nil,                    -- имя в keybind list (по умолчанию - название строки)
 			ShowInList = true,
+			MobileButton = true,           -- экранная кнопка на телефоне
+			MobileSize = nil,              -- Vector2: свой размер кнопки
+			MobileCorner = nil,            -- число: своё закругление кнопки
 			AllowModeChange = true,        -- true: ПКМ-меню даёт менять режим; false: в меню только Reset
 			Flag = nil
 		});
@@ -2631,6 +2634,7 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 		end;
 
 		KeybindLib.Name = resolveName();
+		KeybindLib.FlagName = Config.Flag;
 		KeybindLib.Mode = Config.Mode;
 		KeybindLib.Active = (Config.Mode == 'Always');
 		KeybindLib.ShowInList = Config.ShowInList;
@@ -2664,6 +2668,25 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 
 		function KeybindLib:GetState()
 			return KeybindLib.Active;
+		end;
+
+		-- то же, что нажатие / отпускание клавиши (используют экранные кнопки)
+		function KeybindLib:Press()
+			if KeybindLib.Mode == 'Always' then
+				return;
+			end;
+
+			if KeybindLib.Mode == 'Toggle' then
+				setActive(not KeybindLib.Active);
+			else
+				setActive(true);
+			end;
+		end;
+
+		function KeybindLib:Release()
+			if KeybindLib.Mode == 'Hold' and KeybindLib.Active then
+				setActive(false);
+			end;
 		end;
 
 		function KeybindLib:GetMode()
@@ -3124,6 +3147,17 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 
 		if NeverLose.KeybindList and KeybindLib.ShowInList then
 			KeybindLib.ListItem = NeverLose.KeybindList:Add({ Source = KeybindLib });
+		end;
+
+		-- экранная кнопка для телефона
+		KeybindLib.MobileButton = nil;
+
+		if Config.MobileButton ~= false then
+			KeybindLib.MobileButton = NeverLose:AddMobileButton(KeybindLib , {
+				Size = Config.MobileSize,
+				Corner = Config.MobileCorner,
+				Key = Config.Flag or KeybindLib.Name,
+			});
 		end;
 
 		return KeybindLib;
@@ -4413,6 +4447,89 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 		end;
 
 		return UserFrameItem;
+	end;
+
+	-- готовый блок настроек мобильных кнопок (размер, закругление, режим Edit, сброс)
+	function idx:AddMobileSettings()
+		local Cfg = NeverLose.MobileConfig;
+
+		idx:AddLabel('Function buttons'):AddToggle({
+			Flag = 'MobileButtons',
+			Default = Cfg.ShowFunctionButtons,
+			Callback = function(v)
+				Cfg.ShowFunctionButtons = v and true or false;
+				NeverLose.Mobile:Refresh();
+			end,
+		});
+
+		idx:AddLabel('Button width'):AddSlider({
+			Flag = 'MobileButtonWidth',
+			Min = 40,
+			Max = 140,
+			Default = Cfg.ButtonSize.X,
+			Rounding = 0,
+			Callback = function(v)
+				NeverLose:SetMobileButtonSize(v , nil);
+			end,
+		});
+
+		idx:AddLabel('Button height'):AddSlider({
+			Flag = 'MobileButtonHeight',
+			Min = 28,
+			Max = 80,
+			Default = Cfg.ButtonSize.Y,
+			Rounding = 0,
+			Callback = function(v)
+				NeverLose:SetMobileButtonSize(nil , v);
+			end,
+		});
+
+		idx:AddLabel('Button corner'):AddSlider({
+			Flag = 'MobileButtonCorner',
+			Min = 0,
+			Max = 40,
+			Default = Cfg.ButtonCorner,
+			Rounding = 0,
+			Callback = function(v)
+				NeverLose:SetMobileCorner(v);
+			end,
+		});
+
+		idx:AddLabel('Menu button size'):AddSlider({
+			Flag = 'MobileMenuSize',
+			Min = 30,
+			Max = 70,
+			Default = Cfg.MenuButtonSize,
+			Rounding = 0,
+			Callback = function(v)
+				NeverLose:SetMobileMenuButton(v , nil);
+			end,
+		});
+
+		idx:AddLabel('Menu button corner'):AddSlider({
+			Flag = 'MobileMenuCorner',
+			Min = 0,
+			Max = 35,
+			Default = Cfg.MenuButtonCorner,
+			Rounding = 0,
+			Callback = function(v)
+				NeverLose:SetMobileMenuButton(nil , v);
+			end,
+		});
+
+		NeverLose.Mobile.EditToggle = idx:AddLabel('Edit layout'):AddToggle({
+			Default = false,
+			Callback = function(v)
+				NeverLose:SetMobileEditMode(v);
+			end,
+		});
+
+		idx:AddButton({
+			Name = 'Reset layout',
+			Callback = function()
+				NeverLose:ResetMobileLayout();
+			end,
+		});
 	end;
 
 	function idx:AddDependencyBox()
@@ -7558,6 +7675,8 @@ function NeverLose:CreateWindow(Config)
 
 	Window:SetRender(false);
 
+	NeverLose:InitMobile();
+
 	return Window;
 end;
 
@@ -8494,6 +8613,578 @@ function NeverLose:CreateKeybindList(Config)
 	end;
 
 	return KeybindList;
+end;
+
+----------------------------------------------------------------------------------------------------
+-- MOBILE: плавающая кнопка меню + экранные кнопки функций
+----------------------------------------------------------------------------------------------------
+NeverLose.MobileConfig = NeverLose.MobileConfig or {
+	Enabled = true,
+	Force = nil,                       -- true: показывать и на ПК (для теста), false: никогда
+	MenuButton = true,
+	MenuButtonSize = 40,
+	MenuButtonCorner = 20,             -- >= размер / 2 = круг
+	ShowFunctionButtons = true,
+	ButtonSize = Vector2.new(76 , 40),
+	ButtonCorner = 8,
+	HideWhenMenuOpen = true,
+	Transparency = 0.15,
+};
+
+NeverLose.Mobile = NeverLose.Mobile or {
+	Buttons = {},
+	Layout = {},   -- [ключ] = { x = scale, y = scale }
+	Edit = false,
+};
+
+function NeverLose:IsMobileUI()
+	local Cfg = NeverLose.MobileConfig;
+
+	if not Cfg.Enabled or Cfg.Force == false then
+		return false;
+	end;
+
+	if Cfg.Force then
+		return true;
+	end;
+
+	return UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled;
+end;
+
+do
+	local Mobile = NeverLose.Mobile;
+	local Holder , MenuBtn , DonePill = nil , nil , nil;
+	local MenuPaint = nil;
+
+	local function Cfg()
+		return NeverLose.MobileConfig;
+	end;
+
+	local function ensureHolder()
+		if Holder and Holder.Parent then
+			return Holder;
+		end;
+
+		Holder = Instance.new('Frame');
+		Holder.Name = NeverLose.RandomString();
+		Holder.Parent = NeverLose.ScreenGui;
+		Holder.BackgroundTransparency = 1;
+		Holder.BorderSizePixel = 0;
+		Holder.Size = UDim2.new(1 , 0 , 1 , 0);
+		Holder.ZIndex = 160;
+		Holder.Visible = false;
+
+		return Holder;
+	end;
+
+	local function bindPointer(gui , onDown , onMove , onUp)
+		NeverLose:AddSignal(gui.InputBegan:Connect(function(input)
+			local t = input.UserInputType;
+
+			if t ~= Enum.UserInputType.Touch and t ~= Enum.UserInputType.MouseButton1 then
+				return;
+			end;
+
+			local start = input.Position;
+			local moveConn , endConn;
+
+			onDown(input);
+
+			moveConn = UserInputService.InputChanged:Connect(function(i)
+				if i == input or (t == Enum.UserInputType.MouseButton1 and i.UserInputType == Enum.UserInputType.MouseMovement) then
+					onMove(Vector2.new(i.Position.X - start.X , i.Position.Y - start.Y));
+				end;
+			end);
+
+			endConn = input.Changed:Connect(function()
+				local st = input.UserInputState;
+
+				if st == Enum.UserInputState.End or st == Enum.UserInputState.Cancel then
+					moveConn:Disconnect();
+					endConn:Disconnect();
+					onUp();
+				end;
+			end);
+		end));
+	end;
+
+	local function center(gui)
+		return gui.AbsolutePosition + gui.AbsoluteSize / 2;
+	end;
+
+	local function moveTo(gui , c)
+		local vp = Holder.AbsoluteSize;
+		local half = gui.AbsoluteSize / 2;
+		local x = math.clamp(c.X , half.X , math.max(half.X , vp.X - half.X));
+		local y = math.clamp(c.Y , half.Y , math.max(half.Y , vp.Y - half.Y));
+
+		gui.AnchorPoint = Vector2.new(0.5 , 0.5);
+		gui.Position = UDim2.fromScale(x / vp.X , y / vp.Y);
+
+		return x / vp.X , y / vp.Y;
+	end;
+
+	local function saveLayout(key , x , y)
+		Mobile.Layout[key] = { x = math.floor(x * 10000) / 10000 , y = math.floor(y * 10000) / 10000 };
+	end;
+
+	----------------------------------------------------------------- refresh
+	function Mobile:Refresh()
+		if not Holder then
+			return;
+		end;
+
+		local on = NeverLose:IsMobileUI();
+		local win = NeverLose.CurrentWindow;
+		local menuOpen = win and win.Signal and win.Signal:GetValue() or false;
+		local c = Cfg();
+		local showFns = on and c.ShowFunctionButtons and (Mobile.Edit or not (c.HideWhenMenuOpen and menuOpen));
+
+		Holder.Visible = on;
+
+		if MenuBtn then
+			MenuBtn.Visible = on and c.MenuButton;
+
+			if MenuPaint then
+				MenuPaint(menuOpen);
+			end;
+		end;
+
+		if DonePill then
+			DonePill.Visible = on and Mobile.Edit;
+		end;
+
+		for _ , b in next , Mobile.Buttons do
+			b.Gui.Visible = showFns and b.Source.Mode ~= 'Always';
+			b.Stroke.Thickness = Mobile.Edit and 1.5 or 1;
+			b.Stroke.Color = Mobile.Edit and Color3.fromRGB(190 , 195 , 205) or (b.Source:GetState() and NeverLose.AccentColor or Color3.fromRGB(45 , 48 , 58));
+		end;
+	end;
+
+	----------------------------------------------------------------- function buttons: style / position / paint
+	local function styleButton(b)
+		local c = Cfg();
+		local size = b.Opts.Size or c.ButtonSize;
+		local corner = b.Opts.Corner or c.ButtonCorner;
+		local nameSize = math.clamp(math.floor(size.Y * 0.30) , 9 , 18);
+
+		b.Gui.Size = UDim2.fromOffset(size.X , size.Y);
+		b.Corner.CornerRadius = UDim.new(0 , math.min(corner , math.min(size.X , size.Y) / 2));
+		b.NameLabel.TextSize = nameSize;
+		b.NameLabel.Size = UDim2.new(1 , -8 , 0 , nameSize + 2);
+		b.ModeLabel.TextSize = math.max(nameSize - 1 , 9);
+		b.ModeLabel.Size = UDim2.new(1 , -8 , 0 , math.max(nameSize - 1 , 9) + 2);
+	end;
+
+	local function positionButton(b)
+		local c = Cfg();
+		local size = b.Opts.Size or c.ButtonSize;
+		local saved = Mobile.Layout[b.Key];
+
+		b.Gui.AnchorPoint = Vector2.new(0.5 , 0.5);
+
+		if saved then
+			b.Gui.Position = UDim2.fromScale(saved.x , saved.y);
+		else
+			local index = table.find(Mobile.Buttons , b) or 1;
+
+			b.Gui.Position = UDim2.new(1 , -(size.X / 2 + 10) , 0 , c.MenuButtonSize + 20 + size.Y / 2 + (index - 1) * (size.Y + 6));
+		end;
+	end;
+
+	local function paintButton(b)
+		local c = Cfg();
+		local active = b.Source:GetState();
+
+		b.NameLabel.Text = b.Source.Name or 'Keybind';
+		b.ModeLabel.Text = b.Source.Mode or '';
+
+		NeverLose.PlayAnimate(b.Gui , SlowyTween , {
+			BackgroundColor3 = active and NeverLose.AccentColor or Color3.fromRGB(13 , 15 , 22),
+			BackgroundTransparency = active and 0.1 or c.Transparency,
+		});
+
+		b.Stroke.Color = Mobile.Edit and Color3.fromRGB(190 , 195 , 205) or (active and NeverLose.AccentColor or Color3.fromRGB(45 , 48 , 58));
+		b.Gui.Visible = b.Gui.Visible and b.Source.Mode ~= 'Always';
+	end;
+
+	function NeverLose:AddMobileButton(source , opts)
+		opts = opts or {};
+
+		ensureHolder();
+
+		local b = {
+			Source = source,
+			Opts = opts,
+			Key = opts.Key or source.Name or 'Keybind',
+		};
+
+		local Gui = Instance.new('TextButton');
+		local Corner = Instance.new('UICorner');
+		local Stroke = Instance.new('UIStroke');
+		local Layout = Instance.new('UIListLayout');
+		local NameLabel = Instance.new('TextLabel');
+		local ModeLabel = Instance.new('TextLabel');
+
+		Gui.Name = NeverLose.RandomString();
+		Gui.Parent = Holder;
+		Gui.AutoButtonColor = false;
+		Gui.BackgroundColor3 = Color3.fromRGB(13 , 15 , 22);
+		Gui.BackgroundTransparency = Cfg().Transparency;
+		Gui.BorderSizePixel = 0;
+		Gui.Text = '';
+		Gui.ZIndex = 161;
+		Gui.Visible = false;
+
+		Corner.Parent = Gui;
+
+		Stroke.Parent = Gui;
+		Stroke.Color = Color3.fromRGB(45 , 48 , 58);
+		Stroke.Thickness = 1;
+		Stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border;
+
+		Layout.Parent = Gui;
+		Layout.FillDirection = Enum.FillDirection.Vertical;
+		Layout.HorizontalAlignment = Enum.HorizontalAlignment.Center;
+		Layout.VerticalAlignment = Enum.VerticalAlignment.Center;
+		Layout.SortOrder = Enum.SortOrder.LayoutOrder;
+
+		for i , l in next , { NameLabel , ModeLabel } do
+			l.Name = NeverLose.RandomString();
+			l.Parent = Gui;
+			l.BackgroundTransparency = 1;
+			l.BorderSizePixel = 0;
+			l.Active = false;
+			l.ZIndex = 162;
+			l.Font = Enum.Font.GothamMedium;
+			l.TextColor3 = Color3.fromRGB(255 , 255 , 255);
+			l.TextTruncate = Enum.TextTruncate.AtEnd;
+			l.LayoutOrder = i;
+		end;
+
+		ModeLabel.TextTransparency = 0.4;
+
+		b.Gui = Gui;
+		b.Corner = Corner;
+		b.Stroke = Stroke;
+		b.NameLabel = NameLabel;
+		b.ModeLabel = ModeLabel;
+
+		table.insert(Mobile.Buttons , b);
+
+		styleButton(b);
+		positionButton(b);
+		paintButton(b);
+
+		-- нажатие = как клавиша; в режиме Edit кнопку можно двигать
+		local startCenter = Vector2.zero;
+
+		bindPointer(Gui ,
+			function()
+				if Mobile.Edit then
+					startCenter = center(Gui);
+				else
+					source:Press();
+				end;
+			end ,
+			function(delta)
+				if Mobile.Edit then
+					moveTo(Gui , startCenter + delta);
+				end;
+			end ,
+			function()
+				if Mobile.Edit then
+					local c = center(Gui);
+					local vp = Holder.AbsoluteSize;
+
+					saveLayout(b.Key , c.X / vp.X , c.Y / vp.Y);
+				else
+					source:Release();
+				end;
+			end
+		);
+
+		NeverLose:AddSignal(source.Changed:Connect(function()
+			paintButton(b);
+			Mobile:Refresh();
+		end));
+
+		function b:SetSize(v)
+			b.Opts.Size = v;
+			styleButton(b);
+			positionButton(b);
+		end;
+
+		function b:SetCorner(v)
+			b.Opts.Corner = v;
+			styleButton(b);
+		end;
+
+		Mobile:Refresh();
+
+		return b;
+	end;
+
+	function Mobile:Restyle()
+		for _ , b in next , Mobile.Buttons do
+			styleButton(b);
+			positionButton(b);
+			paintButton(b);
+		end;
+
+		if MenuBtn then
+			Mobile:StyleMenuButton();
+		end;
+
+		Mobile:Refresh();
+	end;
+
+	----------------------------------------------------------------- menu button
+	function Mobile:StyleMenuButton()
+		local c = Cfg();
+
+		MenuBtn.Size = UDim2.fromOffset(c.MenuButtonSize , c.MenuButtonSize);
+		MenuBtn.Corner.CornerRadius = UDim.new(0 , math.min(c.MenuButtonCorner , c.MenuButtonSize / 2));
+		MenuBtn.Icon.TextSize = math.floor(c.MenuButtonSize * 0.5);
+
+		local saved = Mobile.Layout.__menu;
+
+		MenuBtn.AnchorPoint = Vector2.new(0.5 , 0.5);
+
+		if saved then
+			MenuBtn.Position = UDim2.fromScale(saved.x , saved.y);
+		else
+			MenuBtn.Position = UDim2.new(1 , -(c.MenuButtonSize / 2 + 8) , 0 , c.MenuButtonSize / 2 + 10);
+		end;
+	end;
+
+	function NeverLose:InitMobile()
+		if MenuBtn then
+			return;
+		end;
+
+		local win = NeverLose.CurrentWindow;
+
+		ensureHolder();
+
+		local Gui = Instance.new('TextButton');
+		local Corner = Instance.new('UICorner');
+		local Stroke = Instance.new('UIStroke');
+		local Icon = Instance.new('TextLabel');
+
+		Gui.Name = NeverLose.RandomString();
+		Gui.Parent = Holder;
+		Gui.AutoButtonColor = false;
+		Gui.BackgroundColor3 = Color3.fromRGB(13 , 15 , 22);
+		Gui.BackgroundTransparency = Cfg().Transparency;
+		Gui.BorderSizePixel = 0;
+		Gui.Text = '';
+		Gui.ZIndex = 163;
+
+		Corner.Parent = Gui;
+
+		Stroke.Parent = Gui;
+		Stroke.Color = NeverLose.AccentColor;
+		Stroke.Thickness = 1.5;
+		Stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border;
+
+		Icon.Name = NeverLose.RandomString();
+		Icon.Parent = Gui;
+		Icon.AnchorPoint = Vector2.new(0.5 , 0.5);
+		Icon.BackgroundTransparency = 1;
+		Icon.BorderSizePixel = 0;
+		Icon.Position = UDim2.new(0.5 , 0 , 0.5 , 0);
+		Icon.Size = UDim2.new(1 , 0 , 1 , 0);
+		Icon.ZIndex = 164;
+		Icon.Font = Enum.Font.GothamBold;
+		Icon.Text = 'N';
+		Icon.TextColor3 = Color3.fromRGB(255 , 255 , 255);
+
+		MenuBtn = { Gui = Gui , Corner = Corner , Icon = Icon , Stroke = Stroke };
+
+		-- MenuBtn используется как таблица; Visible / Size / Position пробрасываем на Gui
+		setmetatable(MenuBtn , {
+			__index = function(_ , k)
+				return Gui[k];
+			end,
+			__newindex = function(_ , k , v)
+				Gui[k] = v;
+			end,
+		});
+
+		MenuPaint = function(open)
+			NeverLose.PlayAnimate(Gui , SlowyTween , {
+				BackgroundColor3 = open and NeverLose.AccentColor or Color3.fromRGB(13 , 15 , 22),
+				BackgroundTransparency = open and 0.1 or Cfg().Transparency,
+			});
+		end;
+
+		Mobile:StyleMenuButton();
+
+		-- "Done" для режима редактирования
+		DonePill = Instance.new('TextButton');
+		DonePill.Name = NeverLose.RandomString();
+		DonePill.Parent = Holder;
+		DonePill.AnchorPoint = Vector2.new(0.5 , 0);
+		DonePill.AutoButtonColor = false;
+		DonePill.BackgroundColor3 = NeverLose.AccentColor;
+		DonePill.BackgroundTransparency = 0.1;
+		DonePill.BorderSizePixel = 0;
+		DonePill.Position = UDim2.new(0.5 , 0 , 0 , 12);
+		DonePill.Size = UDim2.fromOffset(110 , 30);
+		DonePill.ZIndex = 165;
+		DonePill.Font = Enum.Font.GothamMedium;
+		DonePill.Text = 'Done';
+		DonePill.TextColor3 = Color3.fromRGB(255 , 255 , 255);
+		DonePill.TextSize = 13;
+		DonePill.Visible = false;
+
+		local PillCorner = Instance.new('UICorner');
+		PillCorner.CornerRadius = UDim.new(0 , 15);
+		PillCorner.Parent = DonePill;
+
+		NeverLose:AddSignal(DonePill.Activated:Connect(function()
+			Mobile:SetEdit(false);
+		end));
+
+		-- нажатие = открыть/закрыть меню; перетаскивание = двигать с прилипанием к краю; удержание 0.6с = режим Edit
+		local startCenter = Vector2.zero;
+		local moved , pressed , longFired = false , false , false;
+
+		bindPointer(Gui ,
+			function()
+				moved , pressed , longFired = false , true , false;
+				startCenter = center(Gui);
+
+				task.delay(0.6 , function()
+					if pressed and not moved then
+						longFired = true;
+						Mobile:SetEdit(not Mobile.Edit);
+					end;
+				end);
+			end ,
+			function(delta)
+				if delta.Magnitude > 8 then
+					moved = true;
+				end;
+
+				if moved then
+					moveTo(Gui , startCenter + delta);
+				end;
+			end ,
+			function()
+				pressed = false;
+
+				if moved then
+					local c = center(Gui);
+					local vp = Holder.AbsoluteSize;
+					local half = Gui.AbsoluteSize.X / 2;
+					local x = (c.X < vp.X / 2) and (half + 8) or (vp.X - half - 8);
+
+					saveLayout('__menu' , x / vp.X , c.Y / vp.Y);
+
+					NeverLose.PlayAnimate(Gui , SlowyTween , {
+						Position = UDim2.fromScale(x / vp.X , c.Y / vp.Y),
+					});
+				elseif not longFired and NeverLose.CurrentWindow then
+					NeverLose.CurrentWindow:ToggleInterface();
+				end;
+			end
+		);
+
+		if win and win.Signal then
+			win.Signal:Connect(function()
+				Mobile:Refresh();
+			end);
+		end;
+
+		Mobile:Refresh();
+	end;
+
+	----------------------------------------------------------------- edit mode / reset / setters
+	function Mobile:SetEdit(v)
+		v = v and true or false;
+
+		if Mobile.Edit == v then
+			return;
+		end;
+
+		Mobile.Edit = v;
+
+		local win = NeverLose.CurrentWindow;
+
+		-- при входе в Edit закрываем меню, чтобы были видны кнопки
+		if v and win and win.Signal and win.Signal:GetValue() then
+			win:ToggleInterface();
+		end;
+
+		for _ , b in next , Mobile.Buttons do
+			paintButton(b);
+		end;
+
+		Mobile:Refresh();
+
+		if Mobile.EditToggle and Mobile.EditToggle.SetValue then
+			pcall(Mobile.EditToggle.SetValue , Mobile.EditToggle , v);
+		end;
+	end;
+
+	function NeverLose:SetMobileEditMode(v)
+		Mobile:SetEdit(v);
+	end;
+
+	function NeverLose:ResetMobileLayout()
+		table.clear(Mobile.Layout);
+		Mobile:Restyle();
+	end;
+
+	function NeverLose:SetMobileButtonSize(w , h)
+		local c = Cfg();
+
+		c.ButtonSize = Vector2.new(w or c.ButtonSize.X , h or c.ButtonSize.Y);
+		Mobile:Restyle();
+	end;
+
+	function NeverLose:SetMobileCorner(r)
+		Cfg().ButtonCorner = r;
+		Mobile:Restyle();
+	end;
+
+	function NeverLose:SetMobileMenuButton(size , corner)
+		local c = Cfg();
+
+		c.MenuButtonSize = size or c.MenuButtonSize;
+		c.MenuButtonCorner = corner or c.MenuButtonCorner;
+		Mobile:Restyle();
+	end;
+
+	-- позиции кнопок сохраняются в конфиг
+	NeverLose.Flags['MobileLayout'] = {
+		GetValue = function()
+			local copy = {};
+
+			for k , v in next , Mobile.Layout do
+				copy[k] = { x = v.x , y = v.y };
+			end;
+
+			return copy;
+		end,
+		SetValue = function(_ , data)
+			if type(data) ~= 'table' then
+				return;
+			end;
+
+			table.clear(Mobile.Layout);
+
+			for k , v in next , data do
+				if type(v) == 'table' and type(v.x) == 'number' and type(v.y) == 'number' then
+					Mobile.Layout[k] = { x = v.x , y = v.y };
+				end;
+			end;
+
+			Mobile:Restyle();
+		end,
+	};
 end;
 
 function NeverLose:Unload()
