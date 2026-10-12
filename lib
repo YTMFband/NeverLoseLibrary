@@ -3067,6 +3067,23 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 			Config.Callback(Config.Default);
 		end;
 
+		-- показать / скрыть этот бинд в keybind list на лету
+		function KeybindLib:SetShowInList(v)
+			v = v and true or false;
+			KeybindLib.ShowInList = v;
+
+			local list = NeverLose.KeybindList;
+
+			if v then
+				if list and not KeybindLib.ListItem then
+					KeybindLib.ListItem = list:Add({ Source = KeybindLib });
+				end;
+			elseif KeybindLib.ListItem then
+				KeybindLib.ListItem:Remove();
+				KeybindLib.ListItem = nil;
+			end;
+		end;
+
 		function KeybindLib:Reset()
 			if IsBinding then
 				return;
@@ -3106,7 +3123,7 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 		table.insert(NeverLose.KeybindRegistry , KeybindLib);
 
 		if NeverLose.KeybindList and KeybindLib.ShowInList then
-			NeverLose.KeybindList:Add({ Source = KeybindLib });
+			KeybindLib.ListItem = NeverLose.KeybindList:Add({ Source = KeybindLib });
 		end;
 
 		return KeybindLib;
@@ -4396,6 +4413,132 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 		end;
 
 		return UserFrameItem;
+	end;
+
+	function idx:AddDependencyBox()
+		local BoxFrame = Instance.new('Frame');
+		local BoxLayout = Instance.new('UIListLayout');
+
+		BoxFrame.Name = NeverLose.RandomString();
+		BoxFrame.Parent = Frame;
+		BoxFrame.BackgroundTransparency = 1;
+		BoxFrame.BorderSizePixel = 0;
+		BoxFrame.AutomaticSize = Enum.AutomaticSize.Y;
+		BoxFrame.Size = UDim2.new(1 , 0 , 0 , 0);
+		BoxFrame.ZIndex = LayerIndex;
+
+		BoxLayout.Parent = BoxFrame;
+		BoxLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center;
+		BoxLayout.SortOrder = Enum.SortOrder.LayoutOrder;
+
+		-- внутри бокса работают все те же Add* (AddLabel, AddToggle, AddSlider, AddDropdown, вложенные боксы...)
+		local Box = NeverLose:RegisiterItem(BoxFrame , Signel);
+		local Dependencies = {};
+
+		Box.Root = BoxFrame;
+
+		local function check(dep)
+			local el = dep.Element;
+
+			if type(el) == 'string' then
+				el = NeverLose.Flags[el]; -- можно передать имя Flag
+			end;
+
+			if type(el) ~= 'table' or type(el.GetValue) ~= 'function' then
+				return false;
+			end;
+
+			local ok , current = pcall(el.GetValue , el);
+
+			if not ok then
+				return false;
+			end;
+
+			local want = dep.Value;
+
+			if type(want) == 'function' then
+				local ok2 , result = pcall(want , current);
+				return ok2 and result and true or false;
+			end;
+
+			if type(current) == 'table' then -- мульти-дропдаун
+				return current[want] == true or table.find(current , want) ~= nil;
+			end;
+
+			return current == want;
+		end;
+
+		function Box:Update()
+			local show = true;
+
+			for _ , dep in next , Dependencies do
+				if not check(dep) then
+					show = false;
+					break;
+				end;
+			end;
+
+			if BoxFrame.Visible ~= show then
+				BoxFrame.Visible = show;
+			end;
+		end;
+
+		-- { { элемент_или_Flag , значение } , ... }  -> бокс виден, только если выполнены ВСЕ условия
+		function Box:SetupDependencies(list)
+			table.clear(Dependencies);
+
+			for _ , item in next , list do
+				table.insert(Dependencies , { Element = item[1] , Value = item[2] });
+			end;
+
+			Box:Update();
+		end;
+
+		function Box:AddDependency(element , value)
+			table.insert(Dependencies , { Element = element , Value = value });
+			Box:Update();
+		end;
+
+		function Box:IsVisible()
+			return BoxFrame.Visible;
+		end;
+
+		function Box:Destroy()
+			BoxFrame:Destroy();
+		end;
+
+		-- один общий цикл проверяет все боксы 10 раз в секунду
+		NeverLose.DependencyBoxes = NeverLose.DependencyBoxes or {};
+		table.insert(NeverLose.DependencyBoxes , Box);
+
+		if not NeverLose.DependencyLoop then
+			NeverLose.DependencyLoop = true;
+
+			task.spawn(function()
+				while true do
+					task.wait(0.1);
+
+					local boxes = NeverLose.DependencyBoxes;
+
+					for i = #boxes , 1 , -1 do
+						local b = boxes[i];
+
+						if b.Root.Parent == nil then
+							table.remove(boxes , i);
+						else
+							b:Update();
+						end;
+					end;
+
+					if #boxes == 0 then
+						NeverLose.DependencyLoop = false;
+						return;
+					end;
+				end;
+			end);
+		end;
+
+		return Box;
 	end;
 
 	function idx:AddPlayerList(Config)
@@ -8346,7 +8489,7 @@ function NeverLose:CreateKeybindList(Config)
 	-- подхватываем все AddKeybind, созданные до списка
 	for _ , kb in next , NeverLose.KeybindRegistry or {} do
 		if kb.ShowInList then
-			KeybindList:Add({ Source = kb });
+			kb.ListItem = KeybindList:Add({ Source = kb });
 		end;
 	end;
 
