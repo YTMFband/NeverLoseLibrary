@@ -9126,7 +9126,7 @@ do
 	function NeverLose:CreateMobileButton(opts)
 		opts = NeverLose:ProcessParams(opts , {
 			Name = 'Button',
-			Mode = 'Toggle',          -- 'Toggle' | 'Hold'
+			Mode = 'Toggle',          -- 'Toggle' | 'Hold' | 'Button' (просто нажатие: Callback(true) один раз за тап)
 			Default = false,
 			Visible = true,
 			ShowWhen = nil,           -- элемент (тогл/дропдаун) или имя Flag: кнопка видна, пока значение == ShowValue
@@ -9141,8 +9141,8 @@ do
 
 		local source = {
 			Name = opts.Name,
-			Mode = (opts.Mode == 'Hold') and 'Hold' or 'Toggle',
-			Active = opts.Default and true or false,
+			Mode = (opts.Mode == 'Hold' and 'Hold') or (opts.Mode == 'Button' and 'Button') or 'Toggle',
+			Active = (opts.Mode ~= 'Button') and (opts.Default and true or false),
 			Changed = NeverLose:CreateSignal(0),
 		};
 
@@ -9167,11 +9167,26 @@ do
 		end;
 
 		function source:SetState(v)
+			if source.Mode == 'Button' then
+				return; -- у режима Button нет состояния
+			end;
+
 			setState(v);
 		end;
 
 		function source:Press()
-			if source.Mode == 'Toggle' then
+			if source.Mode == 'Button' then
+				-- обычная кнопка: один вызов за нажатие + короткая подсветка
+				task.spawn(opts.Callback , true);
+
+				source.Active = true;
+				fire();
+
+				task.delay(0.15 , function()
+					source.Active = false;
+					fire();
+				end);
+			elseif source.Mode == 'Toggle' then
 				setState(not source.Active);
 			else
 				setState(true);
