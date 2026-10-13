@@ -2552,6 +2552,7 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 			MobileButton = false,          -- true: создать экранную кнопку для этого бинда
 			MobileSize = nil,              -- Vector2: свой размер кнопки
 			MobileCorner = nil,            -- число: своё закругление кнопки
+			MobileShowMode = nil,          -- true/false: показывать Hold/Toggle на кнопке
 			AllowModeChange = true,        -- true: ПКМ-меню даёт менять режим; false: в меню только Reset
 			Flag = nil
 		});
@@ -3156,6 +3157,7 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 			KeybindLib.MobileButton = NeverLose:AddMobileButton(KeybindLib , {
 				Size = Config.MobileSize,
 				Corner = Config.MobileCorner,
+				ShowMode = Config.MobileShowMode,
 				Key = Config.Flag or KeybindLib.Name,
 			});
 		end;
@@ -4492,6 +4494,14 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 			Rounding = 0,
 			Callback = function(v)
 				NeverLose:SetMobileCorner(v);
+			end,
+		});
+
+		idx:AddLabel('Show Hold/Toggle text'):AddToggle({
+			Flag = 'MobileShowMode',
+			Default = Cfg.ShowMode ~= false,
+			Callback = function(v)
+				NeverLose:SetMobileShowMode(v);
 			end,
 		});
 
@@ -8625,11 +8635,15 @@ NeverLose.MobileConfig = NeverLose.MobileConfig or {
 	MenuButtonSize = 40,
 	MenuButtonCorner = 20,             -- >= размер / 2 = круг
 	MenuButtonIcon = 'N',              -- 'N' (текст) | 'icon:menu' (иконка библиотеки) | 'rbxassetid://123' или 123 (картинка)
+	MenuButtonFillCorner = nil,       -- закругление в режиме Fill (nil = авто: 25% размера, как у иконки приложения)
 	MenuButtonIconScale = 0.55,        -- размер иконки относительно кнопки (0..1)
+	MenuButtonStyle = 'Auto',          -- 'Auto' (картинка = Fill) | 'Fill' (картинка на всю кнопку) | 'Default' (картинка внутри тёмного круга)
 	MenuButtonIconColor = nil,         -- Color3: цвет иконки/текста (nil = белый, картинка без окраски)
 	ShowFunctionButtons = true,
 	ButtonSize = Vector2.new(76 , 40),
 	ButtonCorner = 8,
+	ShowMode = true,                   -- показывать Hold / Toggle под названием кнопки
+	EditShowAll = false,               -- false: в Edit layout только действующие кнопки; true: и скрытые по ShowWhen / SetVisible(false)
 	HideWhenMenuOpen = true,
 	Transparency = 0.15,
 };
@@ -8658,6 +8672,7 @@ do
 	local Mobile = NeverLose.Mobile;
 	local Holder , MenuBtn , DonePill = nil , nil , nil;
 	local MenuPaint = nil;
+	local FillMode = false;
 
 	local function Cfg()
 		return NeverLose.MobileConfig;
@@ -8758,7 +8773,7 @@ do
 		end;
 
 		for _ , b in next , Mobile.Buttons do
-			b.Gui.Visible = showFns and (Mobile.Edit or not b.Hidden) and b.Source.Mode ~= 'Always';
+			b.Gui.Visible = showFns and (not b.Hidden or (Mobile.Edit and c.EditShowAll == true)) and b.Source.Mode ~= 'Always';
 			b.Stroke.Thickness = Mobile.Edit and 1.5 or 1;
 			b.Stroke.Color = Mobile.Edit and Color3.fromRGB(190 , 195 , 205) or (b.Source:GetState() and NeverLose.AccentColor or Color3.fromRGB(45 , 48 , 58));
 		end;
@@ -8781,12 +8796,19 @@ do
 		local c = Cfg();
 		local size = sizeOf(b);
 		local corner = b.Opts.Corner or c.ButtonCorner;
-		local nameSize = math.clamp(math.floor(size.Y * 0.30) , 9 , 18);
+		local showMode = c.ShowMode ~= false;
+
+		if b.Opts.ShowMode ~= nil then
+			showMode = b.Opts.ShowMode and true or false; -- своё значение у конкретной кнопки
+		end;
+
+		local nameSize = showMode and math.clamp(math.floor(size.Y * 0.30) , 9 , 18) or math.clamp(math.floor(size.Y * 0.38) , 9 , 20);
 
 		b.Gui.Size = UDim2.fromOffset(size.X , size.Y);
 		b.Corner.CornerRadius = UDim.new(0 , math.min(corner , math.min(size.X , size.Y) / 2));
 		b.NameLabel.TextSize = nameSize;
 		b.NameLabel.Size = UDim2.new(1 , -8 , 0 , nameSize + 2);
+		b.ModeLabel.Visible = showMode;
 		b.ModeLabel.TextSize = math.max(nameSize - 1 , 9);
 		b.ModeLabel.Size = UDim2.new(1 , -8 , 0 , math.max(nameSize - 1 , 9) + 2);
 	end;
@@ -9031,6 +9053,12 @@ do
 			return sizeOf(b);
 		end;
 
+		-- true: показывать Hold/Toggle, false: только название, nil: как в NeverLose.MobileConfig.ShowMode
+		function b:SetShowMode(v)
+			b.Opts.ShowMode = v;
+			styleButton(b);
+		end;
+
 		-- показать / скрыть кнопку вручную (например из Callback тогла); отключает ShowWhen
 		function b:SetVisible(v)
 			local i = table.find(Watch , b);
@@ -9107,6 +9135,7 @@ do
 			Callback = EmptyFunction, -- function(active)
 			Size = nil,               -- Vector2: свой размер
 			Corner = nil,             -- число: своё закругление
+			ShowMode = nil,           -- true/false: показывать Hold/Toggle на этой кнопке (nil = общая настройка)
 			Flag = nil,               -- ключ для сохранения позиции (по умолчанию Name)
 		});
 
@@ -9164,6 +9193,7 @@ do
 			Size = opts.Size,
 			Corner = opts.Corner,
 			Key = opts.Flag or opts.Name,
+			ShowMode = opts.ShowMode,
 			Visible = opts.Visible,
 			ShowWhen = opts.ShowWhen,
 			ShowValue = opts.ShowValue,
@@ -9214,14 +9244,29 @@ do
 		end;
 
 		if imageId then
+			FillMode = (c.MenuButtonStyle or 'Auto') ~= 'Default';
+
 			MenuBtn.Icon.Visible = false;
 			MenuBtn.Image.Visible = true;
 			MenuBtn.Image.Image = imageId;
 			MenuBtn.Image.ImageColor3 = c.MenuButtonIconColor or Color3.fromRGB(255 , 255 , 255);
-			MenuBtn.Image.Size = UDim2.fromOffset(px , px);
+
+			if FillMode then
+				MenuBtn.Image.Size = UDim2.new(1 , 0 , 1 , 0);
+				local r = math.min(c.MenuButtonFillCorner or math.floor(c.MenuButtonSize * 0.25) , c.MenuButtonSize / 2);
+
+				MenuBtn.ImageCorner.CornerRadius = UDim.new(0 , r);
+				MenuBtn.Corner.CornerRadius = UDim.new(0 , r); -- рамка и свечение повторяют форму иконки
+			else
+				MenuBtn.Image.Size = UDim2.fromOffset(px , px);
+				MenuBtn.ImageCorner.CornerRadius = UDim.new(0 , 0);
+				MenuBtn.Corner.CornerRadius = UDim.new(0 , math.min(c.MenuButtonCorner , c.MenuButtonSize / 2));
+			end;
 		else
+			FillMode = false;
 			local text = tostring(icon or 'N');
 
+			MenuBtn.Corner.CornerRadius = UDim.new(0 , math.min(c.MenuButtonCorner , c.MenuButtonSize / 2));
 			MenuBtn.Image.Visible = false;
 			MenuBtn.Icon.Visible = true;
 			MenuBtn.Icon.TextColor3 = color;
@@ -9233,6 +9278,13 @@ do
 				MenuBtn.Icon.Font = Enum.Font.GothamBold;
 				MenuBtn.Icon.Text = text;
 			end;
+		end;
+
+		-- перекрашиваем кнопку под текущий режим и состояние меню
+		if MenuPaint then
+			local win = NeverLose.CurrentWindow;
+
+			MenuPaint(win and win.Signal and win.Signal:GetValue() or false);
 		end;
 	end;
 
@@ -9310,7 +9362,18 @@ do
 		IconImage.ZIndex = 164;
 		IconImage.Visible = false;
 
-		MenuBtn = { Gui = Gui , Corner = Corner , Icon = Icon , Image = IconImage , Stroke = Stroke };
+		local IconImageCorner = Instance.new('UICorner');
+		IconImageCorner.Parent = IconImage;
+
+		local Halo = Instance.new('UIStroke');
+
+		Halo.Parent = Gui;
+		Halo.Color = NeverLose.AccentColor;
+		Halo.Thickness = 7;
+		Halo.Transparency = 1;
+		Halo.ApplyStrokeMode = Enum.ApplyStrokeMode.Border;
+
+		MenuBtn = { Gui = Gui , Corner = Corner , Icon = Icon , Image = IconImage , ImageCorner = IconImageCorner , Stroke = Stroke , Halo = Halo };
 
 		-- MenuBtn используется как таблица; Visible / Size / Position пробрасываем на Gui
 		setmetatable(MenuBtn , {
@@ -9323,10 +9386,29 @@ do
 		});
 
 		MenuPaint = function(open)
-			NeverLose.PlayAnimate(Gui , SlowyTween , {
-				BackgroundColor3 = open and NeverLose.AccentColor or Color3.fromRGB(13 , 15 , 22),
-				BackgroundTransparency = open and 0.1 or Cfg().Transparency,
-			});
+			if FillMode then
+				-- иконка на всю кнопку: фон не заливаем, открытое меню = яркое толстое кольцо
+				Gui.BackgroundTransparency = 1;
+
+				NeverLose.PlayAnimate(Stroke , SlowyTween , {
+					Thickness = open and 2.5 or 1.5,
+					Transparency = open and 0 or 0.45,
+				});
+
+				NeverLose.PlayAnimate(Halo , SlowyTween , { Transparency = open and 0.72 or 1 }); -- свечение при открытом меню
+			else
+				NeverLose.PlayAnimate(Stroke , SlowyTween , {
+					Thickness = 1.5,
+					Transparency = 0,
+				});
+
+				NeverLose.PlayAnimate(Halo , SlowyTween , { Transparency = 1 });
+
+				NeverLose.PlayAnimate(Gui , SlowyTween , {
+					BackgroundColor3 = open and NeverLose.AccentColor or Color3.fromRGB(13 , 15 , 22),
+					BackgroundTransparency = open and 0.1 or Cfg().Transparency,
+				});
+			end;
 		end;
 
 		Mobile:StyleMenuButton();
@@ -9455,6 +9537,11 @@ do
 		Mobile:Restyle();
 	end;
 
+	function NeverLose:SetMobileShowMode(v)
+		Cfg().ShowMode = v and true or false;
+		Mobile:Restyle();
+	end;
+
 	function NeverLose:SetMobileCorner(r)
 		Cfg().ButtonCorner = r;
 		Mobile:Restyle();
@@ -9464,7 +9551,14 @@ do
 		local c = Cfg();
 
 		c.MenuButtonSize = size or c.MenuButtonSize;
-		c.MenuButtonCorner = corner or c.MenuButtonCorner;
+		if corner then
+			if FillMode then
+				c.MenuButtonFillCorner = corner;
+			else
+				c.MenuButtonCorner = corner;
+			end;
+		end;
+
 		Mobile:Restyle();
 	end;
 
@@ -9482,6 +9576,12 @@ do
 			c.MenuButtonIconScale = scale;
 		end;
 
+		Mobile:ApplyMenuIcon();
+	end;
+
+	-- 'Auto' | 'Fill' | 'Default'
+	function NeverLose:SetMobileMenuStyle(style)
+		Cfg().MenuButtonStyle = style;
 		Mobile:ApplyMenuIcon();
 	end;
 
