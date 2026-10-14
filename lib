@@ -4554,6 +4554,8 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 			MaxVisible = 6,        -- сколько пунктов видно без прокрутки
 			CloseOnSelect = true,  -- одиночный выбор сразу закрывает список
 			Placeholder = 'Select',
+			Size = nil,            -- nil = на всю ширину (как раньше). Число = ширина поля, Vector2.new(ширина, высота) = размер поля
+			Align = 'Right',       -- при своей ширине: 'Right' | 'Left'
 			Flag = nil,
 			Callback = EmptyFunction,
 		});
@@ -4573,9 +4575,35 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 		local IsOpen = false;
 		local Items = {};
 		local Signals = {};
-		local ItemH = 25;
-		local ClosedH = 58;
-		local PanelTop = 56;
+		-- размер поля: без Size всё как раньше (на всю ширину, высота 26)
+		local FieldW , FieldH = nil , 26;
+		local sz = Config.Size;
+
+		if typeof(sz) == 'Vector2' then
+			FieldW , FieldH = sz.X , sz.Y;
+		elseif type(sz) == 'number' then
+			FieldW = sz;
+		elseif type(sz) == 'table' then
+			FieldW , FieldH = sz[1] or sz.X , sz[2] or sz.Y or 26;
+		end;
+
+		FieldH = math.clamp(FieldH or 26 , 18 , 40);
+		FieldW = FieldW and math.max(FieldW , 60) or nil;
+
+		local RightAlign = (FieldW ~= nil) and string.lower(tostring(Config.Align)) ~= 'left';
+		local FontSize = math.clamp(math.floor(FieldH * 0.5 - 1) , 10 , 12);
+		local ItemH = math.clamp(FieldH - 1 , 20 , 25);
+		local ClosedH = 26 + FieldH + 6;
+		local PanelTop = 26 + FieldH + 4;
+		local PanelW = FieldW and math.max(FieldW , 120) or nil;
+
+		local function panelSize(h)
+			if PanelW then
+				return UDim2.new(0 , PanelW , 0 , h);
+			end;
+
+			return UDim2.new(1 , -22 , 0 , h);
+		end;
 
 		local function make(class , props , parent)
 			local obj = Instance.new(class);
@@ -4638,9 +4666,10 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 
 		----------------------------------------------------------- поле
 		local Field = make('Frame' , {
+			AnchorPoint = RightAlign and Vector2.new(1 , 0) or Vector2.new(0 , 0),
 			BackgroundColor3 = Color3.fromRGB(26 , 28 , 36),
-			Position = UDim2.new(0 , 11 , 0 , 26),
-			Size = UDim2.new(1 , -22 , 0 , 26),
+			Position = RightAlign and UDim2.new(1 , -11 , 0 , 26) or UDim2.new(0 , 11 , 0 , 26),
+			Size = FieldW and UDim2.new(0 , FieldW , 0 , FieldH) or UDim2.new(1 , -22 , 0 , FieldH),
 			ZIndex = Z + 10,
 		} , Root);
 		corner(Field , 6);
@@ -4654,7 +4683,7 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 			Font = Enum.Font.GothamMedium,
 			Text = '',
 			TextColor3 = Color3.fromRGB(255 , 255 , 255),
-			TextSize = 12,
+			TextSize = FontSize,
 			TextTransparency = 0.45,
 			TextTruncate = Enum.TextTruncate.AtEnd,
 			TextXAlignment = Enum.TextXAlignment.Left,
@@ -4686,8 +4715,9 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 			BackgroundColor3 = Color3.fromRGB(20 , 22 , 27),
 			BackgroundTransparency = 0.2,
 			ClipsDescendants = true,
-			Position = UDim2.new(0 , 11 , 0 , PanelTop),
-			Size = UDim2.new(1 , -22 , 0 , 0),
+			AnchorPoint = RightAlign and Vector2.new(1 , 0) or Vector2.new(0 , 0),
+			Position = RightAlign and UDim2.new(1 , -11 , 0 , PanelTop) or UDim2.new(0 , 11 , 0 , PanelTop),
+			Size = panelSize(0),
 			Visible = false,
 			ZIndex = Z + 10,
 		} , Root);
@@ -4821,7 +4851,7 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 			Empty.Visible = (n == 0);
 			List.Size = UDim2.new(1 , -6 , 0 , (n == 0) and 0 or listH);
 
-			NeverLose.PlayAnimate(Panel , SlowyTween , { Size = UDim2.new(1 , -22 , 0 , panelH) });
+			NeverLose.PlayAnimate(Panel , SlowyTween , { Size = panelSize(panelH) });
 			NeverLose.PlayAnimate(Root , SlowyTween , { Size = UDim2.new(1 , 0 , 0 , PanelTop + panelH + 6) });
 		end;
 
@@ -4864,7 +4894,7 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 					Font = Enum.Font.GothamMedium,
 					Text = tostring(Value),
 					TextColor3 = Color3.fromRGB(255 , 255 , 255),
-					TextSize = 12,
+					TextSize = FontSize,
 					TextTransparency = 0.5,
 					TextTruncate = Enum.TextTruncate.AtEnd,
 					TextXAlignment = Enum.TextXAlignment.Left,
@@ -4962,7 +4992,7 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 
 			IsOpen = false;
 			Panel.Visible = false;
-			Panel.Size = UDim2.new(1 , -22 , 0 , 0);
+			Panel.Size = panelSize(0);
 			Chevron.Rotation = 0;
 
 			NeverLose.PlayAnimate(Root , SlowyTween , { Size = UDim2.new(1 , 0 , 0 , ClosedH) });
@@ -5284,6 +5314,176 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 		Lib.Root = Root;
 
 		loadText();
+
+		if Config.Flag then
+			NeverLose.Flags[Config.Flag] = Lib;
+		end;
+
+		return Lib;
+	end;
+
+	-- ШИРОКИЙ toggle (squircle): название (+ необязательное описание) слева, квадратно-скруглённый переключатель справа.
+	-- Нажимается вся строка. Параметры и значения как у AddToggle (Default, Flag, Callback).
+	function idx:AddWideToggle(Config)
+		Config = NeverLose:ProcessParams(Config , {
+			Name = 'Toggle',
+			Description = nil,   -- мелкая подпись под названием
+			Default = false,
+			Flag = nil,
+			Callback = EmptyFunction,
+		});
+
+		local Z = LayerIndex;
+		local Lib = {};
+		local HasDesc = type(Config.Description) == 'string' and Config.Description ~= '';
+		local RowH = HasDesc and 48 or 36;
+
+		local function make(class , props , parent)
+			local obj = Instance.new(class);
+
+			obj.Name = NeverLose.RandomString();
+
+			if obj:IsA('GuiObject') then
+				obj.BorderSizePixel = 0;
+				obj.BorderColor3 = Color3.fromRGB(0 , 0 , 0);
+			end;
+
+			for k , v in next , props do
+				obj[k] = v;
+			end;
+
+			obj.Parent = parent;
+
+			return obj;
+		end;
+
+		local Root = make('Frame' , {
+			BackgroundTransparency = 1,
+			Size = UDim2.new(1 , 0 , 0 , RowH),
+			ZIndex = Z + 8,
+		} , Frame);
+
+		NeverLose:AddQuery(Root , Config.Name);
+
+		local NameLabel = make('TextLabel' , {
+			BackgroundTransparency = 1,
+			Position = UDim2.new(0 , 11 , 0 , HasDesc and 7 or 0),
+			Size = UDim2.new(1 , -72 , 0 , HasDesc and 16 or RowH),
+			ZIndex = Z + 9,
+			Font = Enum.Font.GothamMedium,
+			Text = Config.Name,
+			TextColor3 = Color3.fromRGB(255 , 255 , 255),
+			TextSize = 13,
+			TextTransparency = 0.3,
+			TextTruncate = Enum.TextTruncate.AtEnd,
+			TextXAlignment = Enum.TextXAlignment.Left,
+		} , Root);
+
+		local DescLabel = make('TextLabel' , {
+			BackgroundTransparency = 1,
+			Position = UDim2.new(0 , 11 , 0 , 25),
+			Size = UDim2.new(1 , -72 , 0 , 14),
+			Visible = HasDesc,
+			ZIndex = Z + 9,
+			Font = Enum.Font.GothamMedium,
+			Text = HasDesc and Config.Description or '',
+			TextColor3 = Color3.fromRGB(255 , 255 , 255),
+			TextSize = 11,
+			TextTransparency = 0.6,
+			TextTruncate = Enum.TextTruncate.AtEnd,
+			TextXAlignment = Enum.TextXAlignment.Left,
+		} , Root);
+
+		make('Frame' , {
+			AnchorPoint = Vector2.new(0.5 , 1),
+			BackgroundColor3 = Color3.fromRGB(45 , 48 , 58),
+			BackgroundTransparency = 0.65,
+			Position = UDim2.new(0.5 , 0 , 1 , 0),
+			Size = UDim2.new(1 , -20 , 0 , 1),
+			ZIndex = Z + 11,
+		} , Root);
+
+		----------------------------------------------------------- squircle переключатель
+		local Track = make('Frame' , {
+			AnchorPoint = Vector2.new(1 , 0.5),
+			BackgroundColor3 = Color3.fromRGB(10 , 13 , 21),
+			Position = UDim2.new(1 , -11 , 0.5 , 0),
+			Size = UDim2.new(0 , 40 , 0 , 22),
+			ZIndex = Z + 10,
+		} , Root);
+		make('UICorner' , { CornerRadius = UDim.new(0 , 8) } , Track);
+
+		local TrackStroke = make('UIStroke' , {
+			Color = Color3.fromRGB(45 , 48 , 58),
+			Transparency = 0.1,
+		} , Track);
+
+		local Knob = make('Frame' , {
+			AnchorPoint = Vector2.new(0 , 0.5),
+			BackgroundColor3 = Color3.fromRGB(138 , 143 , 158),
+			Position = UDim2.new(0 , 3 , 0.5 , 0),
+			Size = UDim2.new(0 , 16 , 0 , 16),
+			ZIndex = Z + 11,
+		} , Track);
+		make('UICorner' , { CornerRadius = UDim.new(0 , 6) } , Knob);
+
+		local function paint(value)
+			if value then
+				NeverLose.PlayAnimate(Track , SlowyTween , { BackgroundColor3 = NeverLose.AccentColor });
+				NeverLose.PlayAnimate(TrackStroke , SlowyTween , { Color = NeverLose.AccentColor , Transparency = 0 });
+				NeverLose.PlayAnimate(Knob , SlowyTween , {
+					BackgroundColor3 = Color3.fromRGB(255 , 255 , 255),
+					Position = UDim2.new(0 , 21 , 0.5 , 0),
+				});
+			else
+				NeverLose.PlayAnimate(Track , SlowyTween , { BackgroundColor3 = Color3.fromRGB(10 , 13 , 21) });
+				NeverLose.PlayAnimate(TrackStroke , SlowyTween , { Color = Color3.fromRGB(45 , 48 , 58) , Transparency = 0.1 });
+				NeverLose.PlayAnimate(Knob , SlowyTween , {
+					BackgroundColor3 = Color3.fromRGB(138 , 143 , 158),
+					Position = UDim2.new(0 , 3 , 0.5 , 0),
+				});
+			end;
+		end;
+
+		Config.Default = Config.Default and true or false;
+		paint(Config.Default);
+
+		NeverLose:CreateInput(Root , function()
+			Config.Default = not Config.Default;
+			paint(Config.Default);
+			Config.Callback(Config.Default);
+		end);
+
+		function Lib:GetValue()
+			return Config.Default;
+		end;
+
+		function Lib:SetValue(v)
+			Config.Default = v and true or false;
+			paint(Config.Default);
+			Config.Callback(Config.Default);
+		end;
+
+		function Lib:SetName(n)
+			Config.Name = n;
+			NameLabel.Text = n;
+		end;
+
+		function Lib:SetDescription(t)
+			DescLabel.Text = tostring(t or '');
+		end;
+
+		function Lib:Destroy()
+			Root:Destroy();
+		end;
+
+		Root.Visible = Signel:GetValue() and true or false;
+
+		Signel:Connect(function(v)
+			Root.Visible = v and true or false;
+		end);
+
+		Lib.Root = Root;
 
 		if Config.Flag then
 			NeverLose.Flags[Config.Flag] = Lib;
