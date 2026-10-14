@@ -4542,6 +4542,513 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 		});
 	end;
 
+	-- ШИРОКИЙ dropdown (тест): подпись сверху, поле на всю ширину, список раскрывается прямо в секции, с поиском.
+	-- Значения те же, что у AddDropdown: одиночный = значение, Multi = { [значение] = true }
+	function idx:AddWideDropdown(Config)
+		Config = NeverLose:ProcessParams(Config , {
+			Name = 'Dropdown',
+			Values = {},
+			Default = nil,
+			Multi = false,
+			Search = true,         -- поле поиска вверху списка
+			MaxVisible = 6,        -- сколько пунктов видно без прокрутки
+			CloseOnSelect = true,  -- одиночный выбор сразу закрывает список
+			Placeholder = 'Select',
+			Flag = nil,
+			Callback = EmptyFunction,
+		});
+
+		Config.Default = NeverLose.ProcessDropdown(Config.Default);
+
+		if Config.Multi then
+			if type(Config.Default) == 'string' then
+				Config.Default = { [Config.Default] = true };
+			elseif type(Config.Default) ~= 'table' then
+				Config.Default = {};
+			end;
+		end;
+
+		local Z = LayerIndex;
+		local Lib = {};
+		local IsOpen = false;
+		local Items = {};
+		local Signals = {};
+		local ItemH = 25;
+		local ClosedH = 58;
+		local PanelTop = 56;
+
+		local function make(class , props , parent)
+			local obj = Instance.new(class);
+
+			obj.Name = NeverLose.RandomString();
+
+			if obj:IsA('GuiObject') then
+				obj.BorderSizePixel = 0;
+				obj.BorderColor3 = Color3.fromRGB(0 , 0 , 0);
+			end;
+
+			for k , v in next , props do
+				obj[k] = v;
+			end;
+
+			obj.Parent = parent;
+
+			return obj;
+		end;
+
+		local function corner(parent , r)
+			return make('UICorner' , { CornerRadius = UDim.new(0 , r) } , parent);
+		end;
+
+		local function stroke(parent)
+			return make('UIStroke' , { Color = Color3.fromRGB(45 , 48 , 58) , Transparency = 0.65 } , parent);
+		end;
+
+		local Root = make('Frame' , {
+			BackgroundTransparency = 1,
+			ClipsDescendants = true,
+			Size = UDim2.new(1 , 0 , 0 , ClosedH),
+			ZIndex = Z + 8,
+		} , Frame);
+
+		NeverLose:AddQuery(Root , Config.Name);
+
+		local NameLabel = make('TextLabel' , {
+			BackgroundTransparency = 1,
+			Position = UDim2.new(0 , 11 , 0 , 6),
+			Size = UDim2.new(1 , -22 , 0 , 15),
+			ZIndex = Z + 9,
+			Font = Enum.Font.GothamMedium,
+			Text = Config.Name,
+			TextColor3 = Color3.fromRGB(255 , 255 , 255),
+			TextSize = 13,
+			TextTransparency = 0.35,
+			TextTruncate = Enum.TextTruncate.AtEnd,
+			TextXAlignment = Enum.TextXAlignment.Left,
+		} , Root);
+
+		make('Frame' , {
+			AnchorPoint = Vector2.new(0.5 , 1),
+			BackgroundColor3 = Color3.fromRGB(45 , 48 , 58),
+			BackgroundTransparency = 0.65,
+			Position = UDim2.new(0.5 , 0 , 1 , 0),
+			Size = UDim2.new(1 , -20 , 0 , 1),
+			ZIndex = Z + 11,
+		} , Root);
+
+		----------------------------------------------------------- поле
+		local Field = make('Frame' , {
+			BackgroundColor3 = Color3.fromRGB(26 , 28 , 36),
+			Position = UDim2.new(0 , 11 , 0 , 26),
+			Size = UDim2.new(1 , -22 , 0 , 26),
+			ZIndex = Z + 10,
+		} , Root);
+		corner(Field , 6);
+		stroke(Field);
+
+		local FieldLabel = make('TextLabel' , {
+			BackgroundTransparency = 1,
+			Position = UDim2.new(0 , 9 , 0 , 0),
+			Size = UDim2.new(1 , -34 , 1 , 0),
+			ZIndex = Z + 11,
+			Font = Enum.Font.GothamMedium,
+			Text = '',
+			TextColor3 = Color3.fromRGB(255 , 255 , 255),
+			TextSize = 12,
+			TextTransparency = 0.45,
+			TextTruncate = Enum.TextTruncate.AtEnd,
+			TextXAlignment = Enum.TextXAlignment.Left,
+		} , Field);
+
+		local Chevron = make('TextLabel' , {
+			AnchorPoint = Vector2.new(1 , 0.5),
+			BackgroundTransparency = 1,
+			Position = UDim2.new(1 , -4 , 0.5 , 0),
+			Size = UDim2.new(0 , 20 , 0 , 20),
+			ZIndex = Z + 11,
+			FontFace = NeverLose.BuiltInBold,
+			Text = 'chevron-small-down',
+			TextColor3 = Color3.fromRGB(223 , 223 , 223),
+			TextSize = 16,
+			TextTransparency = 0.25,
+		} , Field);
+
+		NeverLose:AddSignal(Field.MouseEnter:Connect(function()
+			NeverLose.PlayAnimate(FieldLabel , SlowyTween , { TextTransparency = 0.15 });
+		end));
+
+		NeverLose:AddSignal(Field.MouseLeave:Connect(function()
+			NeverLose.PlayAnimate(FieldLabel , SlowyTween , { TextTransparency = 0.45 });
+		end));
+
+		----------------------------------------------------------- панель со списком
+		local Panel = make('Frame' , {
+			BackgroundColor3 = Color3.fromRGB(20 , 22 , 27),
+			BackgroundTransparency = 0.2,
+			ClipsDescendants = true,
+			Position = UDim2.new(0 , 11 , 0 , PanelTop),
+			Size = UDim2.new(1 , -22 , 0 , 0),
+			Visible = false,
+			ZIndex = Z + 10,
+		} , Root);
+		corner(Panel , 8);
+		stroke(Panel);
+
+		local SearchBox = nil;
+
+		if Config.Search then
+			local SearchFrame = make('Frame' , {
+				BackgroundColor3 = Color3.fromRGB(26 , 28 , 36),
+				Position = UDim2.new(0 , 6 , 0 , 6),
+				Size = UDim2.new(1 , -12 , 0 , 24),
+				ZIndex = Z + 11,
+			} , Panel);
+			corner(SearchFrame , 6);
+			stroke(SearchFrame);
+
+			SearchBox = make('TextBox' , {
+				BackgroundTransparency = 1,
+				Position = UDim2.new(0 , 8 , 0 , 0),
+				Size = UDim2.new(1 , -16 , 1 , 0),
+				ZIndex = Z + 12,
+				ClearTextOnFocus = false,
+				Font = Enum.Font.GothamMedium,
+				PlaceholderText = 'Search...',
+				PlaceholderColor3 = Color3.fromRGB(140 , 145 , 160),
+				Text = '',
+				TextColor3 = Color3.fromRGB(255 , 255 , 255),
+				TextSize = 12,
+				TextTransparency = 0.2,
+				TextXAlignment = Enum.TextXAlignment.Left,
+			} , SearchFrame);
+		end;
+
+		local ListTop = Config.Search and 36 or 3;
+
+		local List = make('ScrollingFrame' , {
+			Active = true,
+			BackgroundTransparency = 1,
+			Position = UDim2.new(0 , 3 , 0 , ListTop),
+			Size = UDim2.new(1 , -6 , 0 , 0),
+			CanvasSize = UDim2.new(0 , 0 , 0 , 0),
+			ScrollBarThickness = 0,
+			ScrollingDirection = Enum.ScrollingDirection.Y,
+			ZIndex = Z + 11,
+		} , Panel);
+
+		local ListLayout = make('UIListLayout' , { SortOrder = Enum.SortOrder.LayoutOrder } , List);
+
+		NeverLose:AddSignal(ListLayout:GetPropertyChangedSignal('AbsoluteContentSize'):Connect(function()
+			List.CanvasSize = UDim2.fromOffset(0 , ListLayout.AbsoluteContentSize.Y);
+		end));
+
+		local Empty = make('TextLabel' , {
+			BackgroundTransparency = 1,
+			Position = UDim2.new(0 , 0 , 0 , ListTop),
+			Size = UDim2.new(1 , 0 , 0 , ItemH),
+			Visible = false,
+			ZIndex = Z + 11,
+			Font = Enum.Font.GothamMedium,
+			Text = 'Nothing found',
+			TextColor3 = Color3.fromRGB(255 , 255 , 255),
+			TextSize = 12,
+			TextTransparency = 0.6,
+		} , Panel);
+
+		----------------------------------------------------------- значения
+		local function isMatch(value)
+			local d = Config.Default;
+
+			if type(d) == 'table' then
+				return (d[value] == true) or (table.find(d , value) ~= nil);
+			end;
+
+			return d == value;
+		end;
+
+		local function valueText()
+			local d = Config.Default;
+
+			if type(d) == 'table' then
+				local out = {};
+
+				for _ , item in next , Config.Values do
+					if isMatch(item) then
+						table.insert(out , tostring(item));
+					end;
+				end;
+
+				if #out == 0 then
+					return Config.Placeholder;
+				end;
+
+				return table.concat(out , ', ');
+			end;
+
+			if d == nil then
+				return Config.Placeholder;
+			end;
+
+			return tostring(d);
+		end;
+
+		local function updateText()
+			FieldLabel.Text = valueText();
+		end;
+
+		local function visibleCount()
+			local n = 0;
+
+			for _ , it in next , Items do
+				if it.Frame.Visible then
+					n += 1;
+				end;
+			end;
+
+			return n;
+		end;
+
+		local function relayout()
+			if not IsOpen then
+				return;
+			end;
+
+			local n = visibleCount();
+			local rows = math.max(1 , math.min(n , Config.MaxVisible));
+			local listH = rows * ItemH;
+			local panelH = ListTop + listH + 3;
+
+			Empty.Visible = (n == 0);
+			List.Size = UDim2.new(1 , -6 , 0 , (n == 0) and 0 or listH);
+
+			NeverLose.PlayAnimate(Panel , SlowyTween , { Size = UDim2.new(1 , -22 , 0 , panelH) });
+			NeverLose.PlayAnimate(Root , SlowyTween , { Size = UDim2.new(1 , 0 , 0 , PanelTop + panelH + 6) });
+		end;
+
+		local function applyFilter()
+			local q = SearchBox and string.lower(SearchBox.Text) or '';
+
+			for _ , it in next , Items do
+				it.Frame.Visible = (q == '') or (string.find(string.lower(tostring(it.Value)) , q , 1 , true) ~= nil);
+			end;
+
+			relayout();
+		end;
+
+		function Lib:Generate()
+			for _ , it in next , Items do
+				it.Frame:Destroy();
+			end;
+
+			for _ , sg in next , Signals do
+				sg:Disconnect();
+			end;
+
+			table.clear(Items);
+			table.clear(Signals);
+
+			for _ , Value in next , Config.Values do
+				local ItemFrame = make('Frame' , {
+					BackgroundColor3 = Color3.fromRGB(29 , 31 , 38),
+					BackgroundTransparency = 1,
+					Size = UDim2.new(1 , 0 , 0 , ItemH),
+					ZIndex = Z + 12,
+				} , List);
+				corner(ItemFrame , 6);
+
+				local ItemLabel = make('TextLabel' , {
+					BackgroundTransparency = 1,
+					Position = UDim2.new(0 , 10 , 0 , 0),
+					Size = UDim2.new(1 , -36 , 1 , 0),
+					ZIndex = Z + 13,
+					Font = Enum.Font.GothamMedium,
+					Text = tostring(Value),
+					TextColor3 = Color3.fromRGB(255 , 255 , 255),
+					TextSize = 12,
+					TextTransparency = 0.5,
+					TextTruncate = Enum.TextTruncate.AtEnd,
+					TextXAlignment = Enum.TextXAlignment.Left,
+				} , ItemFrame);
+
+				local Check = make('TextLabel' , {
+					AnchorPoint = Vector2.new(1 , 0.5),
+					BackgroundTransparency = 1,
+					Position = UDim2.new(1 , -6 , 0.5 , 0),
+					Size = UDim2.new(0 , 18 , 0 , 18),
+					ZIndex = Z + 13,
+					FontFace = NeverLose.BuiltInBold,
+					Text = 'check',
+					TextColor3 = NeverLose.AccentColor,
+					TextSize = 16,
+					TextTransparency = 1,
+				} , ItemFrame);
+
+				local it = { Frame = ItemFrame , Value = Value };
+
+				function it.mark()
+					local on = isMatch(Value);
+
+					NeverLose.PlayAnimate(ItemLabel , SlowyTween , {
+						TextTransparency = on and 0.1 or 0.5,
+						TextColor3 = on and NeverLose.AccentColor or Color3.fromRGB(255 , 255 , 255),
+					});
+
+					NeverLose.PlayAnimate(Check , SlowyTween , { TextTransparency = on and 0.15 or 1 });
+				end;
+
+				it.mark();
+				table.insert(Items , it);
+
+				table.insert(Signals , ItemFrame.MouseEnter:Connect(function()
+					NeverLose.PlayAnimate(ItemFrame , SlowyTween , { BackgroundTransparency = 0.1 });
+				end));
+
+				table.insert(Signals , ItemFrame.MouseLeave:Connect(function()
+					NeverLose.PlayAnimate(ItemFrame , SlowyTween , { BackgroundTransparency = 1 });
+				end));
+
+				local _ , bth = NeverLose:CreateInput(ItemFrame , function()
+					if Config.Multi then
+						Config.Default[Value] = not Config.Default[Value];
+						it.mark();
+					else
+						Config.Default = Value;
+
+						for _ , o in next , Items do
+							o.mark();
+						end;
+
+						if Config.CloseOnSelect then
+							Lib:Close();
+						end;
+					end;
+
+					updateText();
+					Config.Callback(Config.Default);
+				end);
+
+				table.insert(Signals , bth);
+			end;
+
+			if IsOpen then
+				applyFilter();
+			end;
+		end;
+
+		function Lib:Open()
+			if IsOpen then
+				return;
+			end;
+
+			IsOpen = true;
+			Panel.Visible = true;
+			Chevron.Rotation = 180;
+
+			if SearchBox then
+				SearchBox.Text = '';
+			end;
+
+			for _ , it in next , Items do
+				it.mark();
+			end;
+
+			applyFilter();
+		end;
+
+		function Lib:Close()
+			if not IsOpen then
+				return;
+			end;
+
+			IsOpen = false;
+			Panel.Visible = false;
+			Panel.Size = UDim2.new(1 , -22 , 0 , 0);
+			Chevron.Rotation = 0;
+
+			NeverLose.PlayAnimate(Root , SlowyTween , { Size = UDim2.new(1 , 0 , 0 , ClosedH) });
+		end;
+
+		function Lib:Toggle()
+			if IsOpen then
+				Lib:Close();
+			else
+				Lib:Open();
+			end;
+		end;
+
+		function Lib:GetValue()
+			return Config.Default;
+		end;
+
+		function Lib:SetValue(v)
+			v = NeverLose.ProcessDropdown(v);
+
+			if Config.Multi and type(v) ~= 'table' then
+				v = (v ~= nil) and { [v] = true } or {};
+			end;
+
+			Config.Default = v;
+
+			updateText();
+
+			for _ , it in next , Items do
+				it.mark();
+			end;
+
+			Config.Callback(Config.Default);
+		end;
+
+		function Lib:SetValues(list)
+			Config.Values = list;
+			Lib:Generate();
+			updateText();
+		end;
+
+		function Lib:SetName(n)
+			Config.Name = n;
+			NameLabel.Text = n;
+		end;
+
+		function Lib:Destroy()
+			for _ , sg in next , Signals do
+				sg:Disconnect();
+			end;
+
+			Root:Destroy();
+		end;
+
+		NeverLose:CreateInput(Field , function()
+			Lib:Toggle();
+		end);
+
+		if SearchBox then
+			NeverLose:AddSignal(SearchBox:GetPropertyChangedSignal('Text'):Connect(applyFilter));
+		end;
+
+		Root.Visible = Signel:GetValue() and true or false;
+
+		Signel:Connect(function(v)
+			Root.Visible = v and true or false;
+
+			if not v then
+				Lib:Close();
+			end;
+		end);
+
+		Lib.Root = Root;
+
+		Lib:Generate();
+		updateText();
+
+		if Config.Flag then
+			NeverLose.Flags[Config.Flag] = Lib;
+		end;
+
+		return Lib;
+	end;
+
+	idx.AddTestDropdown = idx.AddWideDropdown; -- короткое имя для теста
+
 	function idx:AddDependencyBox()
 		local BoxFrame = Instance.new('Frame');
 		local BoxLayout = Instance.new('UIListLayout');
@@ -6371,17 +6878,22 @@ function NeverLose:CreateWindow(Config)
 			end)))
 		end;
 
-		-- полноширинные секции (Position = 'full')
-		local TopFrame = Instance.new("Frame")
+		-- полноширинные секции (Position = 'full'): прокручиваемый блок сверху
+		local TopFrame = Instance.new("ScrollingFrame")
 		local TopLayout = Instance.new("UIListLayout")
 		local IsSingle = (Config.Type == "Single");
+		local SideCount = 0; -- сколько секций в left/right
 
 		TopFrame.Name = NeverLose.RandomString();
 		TopFrame.Parent = TabFrame
+		TopFrame.Active = true
 		TopFrame.BackgroundTransparency = 1.000
 		TopFrame.BorderSizePixel = 0
 		TopFrame.Position = UDim2.new(0, 0, 0, 0)
 		TopFrame.Size = UDim2.new(1, 0, 0, 0)
+		TopFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+		TopFrame.ScrollBarThickness = 0
+		TopFrame.ScrollingDirection = Enum.ScrollingDirection.Y
 		TopFrame.ZIndex = 9
 
 		TopLayout.Parent = TopFrame
@@ -6389,11 +6901,26 @@ function NeverLose:CreateWindow(Config)
 		TopLayout.SortOrder = Enum.SortOrder.LayoutOrder
 		TopLayout.Padding = UDim.new(0, 5)
 
-		NeverLose:AddSignal(TopLayout:GetPropertyChangedSignal('AbsoluteContentSize'):Connect(LPH_NO_VIRTUALIZE(function()
-			local h = TopLayout.AbsoluteContentSize.Y;
+		local function Relayout()
+			local contentH = TopLayout.AbsoluteContentSize.Y;
+			local tabH = TabFrame.AbsoluteSize.Y;
+			local limit = contentH;
+
+			if tabH > 0 then
+				if SideCount > 0 then
+					-- есть секции слева/справа: full-блок занимает максимум ~55% вкладки и дальше прокручивается
+					limit = math.max(math.floor(tabH * 0.55) , 120);
+				else
+					-- только full-секции: блок занимает всю вкладку
+					limit = tabH - 5;
+				end;
+			end;
+
+			local h = math.max(math.min(contentH , limit) , 0);
 			local off = (h > 1) and (h + 5) or 0;
 
-			TopFrame.Size = UDim2.new(1, 0, 0, math.max(h , 0));
+			TopFrame.Size = UDim2.new(1, 0, 0, h);
+			TopFrame.CanvasSize = UDim2.fromOffset(0 , contentH + 1);
 
 			if IsSingle then
 				LeftScroll.Position = UDim2.new(0.5, 0, 0.5, off / 2);
@@ -6404,7 +6931,10 @@ function NeverLose:CreateWindow(Config)
 				RightScroll.Position = UDim2.new(0.75, 0, 0.5, off / 2);
 				RightScroll.Size = UDim2.new(0.5, 0, 1, -5 - off);
 			end;
-		end)))
+		end;
+
+		NeverLose:AddSignal(TopLayout:GetPropertyChangedSignal('AbsoluteContentSize'):Connect(LPH_NO_VIRTUALIZE(Relayout)))
+		NeverLose:AddSignal(TabFrame:GetPropertyChangedSignal('AbsoluteSize'):Connect(LPH_NO_VIRTUALIZE(Relayout)))
 
 		NeverLose:AddSignal(TabIcon:GetPropertyChangedSignal('TextTransparency'):Connect(LPH_NO_VIRTUALIZE(function()
 			if TabIcon.TextTransparency > 0.4 then
@@ -6535,6 +7065,12 @@ function NeverLose:CreateWindow(Config)
 			SectionFrame.Name = NeverLose.RandomString();
 			local SectionPos = string.lower(Config.Position);
 			SectionFrame.Parent = (SectionPos == 'full' and TopFrame) or (SectionPos == 'left' and LeftScroll) or RightScroll
+
+			if SectionPos ~= 'full' then
+				SideCount += 1;
+			end;
+
+			Relayout();
 			SectionFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 			SectionFrame.BackgroundTransparency = 1.000
 			SectionFrame.BorderColor3 = Color3.fromRGB(0, 0, 0)
