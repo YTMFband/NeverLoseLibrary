@@ -7756,11 +7756,13 @@ function NeverLose:CreateWindow(Config)
 				Position = 'left',
 				Collapsible = false, -- подпись становится кнопкой сворачивания
 				Collapsed = false,   -- стартовать свёрнутой (только при Collapsible = true)
-				Flag = nil           -- сохранять свёрнутость в конфиг
+				Flag = nil,          -- сохранять свёрнутость в конфиг
+				Style = nil          -- 'Inside' (название внутри карточки, по умолчанию) | 'Classic' (подпись над карточкой)
 			});
 
 			local Collapsed = (Config.Collapsible == true) and (Config.Collapsed == true);
-			local OnSized = nil;
+			local Inside = string.lower(tostring(Config.Style or NeverLose.SectionStyle or 'Inside')) ~= 'classic';
+			local HeaderH = 30;
 
 			local SectionFrame = Instance.new("Frame")
 			local SectionLabel = Instance.new("TextLabel")
@@ -7826,25 +7828,71 @@ function NeverLose:CreateWindow(Config)
 			UIListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 			UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
 
+			-- стиль Inside: название секции лежит внутри карточки на светлой полосе-заголовке
+			local Header , Band , TitleLabel = nil , nil , nil;
+
+			if Inside then
+				SectionLabel.Visible = false;
+				SectionHandler.Position = UDim2.new(0.5, 0, 0, 0);
+				SectionHandler.Size = UDim2.new(1, -10, 1, 0);
+
+				Header = Instance.new("Frame");
+				Header.Name = NeverLose.RandomString();
+				Header.Parent = SectionHandler;
+				Header.BackgroundTransparency = 1.000;
+				Header.BorderSizePixel = 0;
+				Header.ClipsDescendants = true;
+				Header.LayoutOrder = -100000;
+				Header.Size = UDim2.new(1, 0, 0, HeaderH);
+				Header.ZIndex = 10;
+
+				-- полоса выше заголовка на 10px: нижние скругления обрезаются, остаются скруглённые верхние углы карточки
+				Band = Instance.new("Frame");
+				Band.Name = NeverLose.RandomString();
+				Band.Parent = Header;
+				Band.BackgroundColor3 = Color3.fromRGB(255, 255, 255);
+				Band.BackgroundTransparency = 0.955;
+				Band.BorderSizePixel = 0;
+				Band.Size = UDim2.new(1, 0, 0, Collapsed and HeaderH or (HeaderH + 10));
+				Band.ZIndex = 10;
+
+				local BandCorner = Instance.new("UICorner");
+				BandCorner.CornerRadius = UDim.new(0, 10);
+				BandCorner.Parent = Band;
+
+				TitleLabel = Instance.new("TextLabel");
+				TitleLabel.Name = NeverLose.RandomString();
+				TitleLabel.Parent = Header;
+				TitleLabel.BackgroundTransparency = 1.000;
+				TitleLabel.BorderSizePixel = 0;
+				TitleLabel.Position = UDim2.new(0, 11, 0, 0);
+				TitleLabel.Size = UDim2.new(1, -40, 1, 0);
+				TitleLabel.ZIndex = 11;
+				TitleLabel.Font = Enum.Font.GothamMedium;
+				TitleLabel.Text = Config.Name;
+				TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255);
+				TitleLabel.TextSize = 12.000;
+				TitleLabel.TextTransparency = 0.100;
+				TitleLabel.TextTruncate = Enum.TextTruncate.AtEnd;
+				TitleLabel.TextXAlignment = Enum.TextXAlignment.Left;
+			end;
+
 			local function ApplySectionSize()
 				local contentY = UIListLayout.AbsoluteContentSize.Y;
+				local emptyY = Inside and (HeaderH + 1) or 1;
 
-				if contentY <= 1 then
+				if contentY <= emptyY then
 					NeverLose.PlayAnimate(SectionFrame , VSlowTween , {
 						Size = UDim2.new(1, -5, 0, 0)
 					})
 				elseif Collapsed then
 					NeverLose.PlayAnimate(SectionFrame , VSlowTween , {
-						Size = UDim2.new(1, -5, 0, 18) -- видна только подпись
+						Size = UDim2.new(1, -5, 0, Inside and (HeaderH + 1) or 18) -- виден только заголовок
 					})
 				else
 					NeverLose.PlayAnimate(SectionFrame , VSlowTween , {
-						Size = UDim2.new(1, -5, 0, contentY + 19.5)
+						Size = UDim2.new(1, -5, 0, Inside and (contentY + 1) or (contentY + 19.5))
 					})
-				end;
-
-				if OnSized then
-					OnSized();
 				end;
 			end;
 
@@ -7856,19 +7904,31 @@ function NeverLose:CreateWindow(Config)
 				return Collapsed;
 			end;
 
+			local Chevron = nil;
+
+			local function Fade(v)
+				if Chevron then
+					NeverLose.PlayAnimate(Chevron , SlowyTween , { TextTransparency = v and 0.3 or 1 });
+				end;
+
+				if Inside then
+					NeverLose.PlayAnimate(TitleLabel , SlowyTween , { TextTransparency = v and 0.1 or 1 });
+					NeverLose.PlayAnimate(Band , SlowyTween , { BackgroundTransparency = v and 0.955 or 1 });
+				end;
+			end;
+
 			if Config.Collapsible then
-				local Chevron = Instance.new("TextLabel")
-				local CountLabel = Instance.new("TextLabel")
 				local CapButton = Instance.new("TextButton")
 
+				Chevron = Instance.new("TextLabel")
 				Chevron.Name = NeverLose.RandomString();
-				Chevron.Parent = SectionFrame
+				Chevron.Parent = Inside and Header or SectionFrame
 				Chevron.AnchorPoint = Vector2.new(1, 0.5)
 				Chevron.BackgroundTransparency = 1.000
 				Chevron.BorderSizePixel = 0
-				Chevron.Position = UDim2.new(1, -9, 0, 7)
+				Chevron.Position = Inside and UDim2.new(1, -9, 0.5, 0) or UDim2.new(1, -9, 0, 7)
 				Chevron.Size = UDim2.new(0, 16, 0, 16)
-				Chevron.ZIndex = 10
+				Chevron.ZIndex = 12
 				Chevron.FontFace = NeverLose.BuiltInBold
 				Chevron.Text = 'chevron-small-down'
 				Chevron.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -7876,48 +7936,16 @@ function NeverLose:CreateWindow(Config)
 				Chevron.TextTransparency = 0.300
 				Chevron.Rotation = Collapsed and -90 or 0
 
-				CountLabel.Name = NeverLose.RandomString();
-				CountLabel.Parent = SectionFrame
-				CountLabel.AnchorPoint = Vector2.new(1, 0.5)
-				CountLabel.BackgroundTransparency = 1.000
-				CountLabel.BorderSizePixel = 0
-				CountLabel.Position = UDim2.new(1, -27, 0, 7)
-				CountLabel.Size = UDim2.new(0, 80, 0, 15)
-				CountLabel.ZIndex = 10
-				CountLabel.Font = Enum.Font.GothamMedium
-				CountLabel.Text = ''
-				CountLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-				CountLabel.TextSize = 11.000
-				CountLabel.TextTransparency = 0.500
-				CountLabel.TextXAlignment = Enum.TextXAlignment.Right
-				CountLabel.Visible = Collapsed
-
-				-- невидимая кнопка на всю строку подписи
+				-- невидимая кнопка на всю строку заголовка
 				CapButton.Name = NeverLose.RandomString();
-				CapButton.Parent = SectionFrame
+				CapButton.Parent = Inside and Header or SectionFrame
 				CapButton.AutoButtonColor = false
 				CapButton.BackgroundTransparency = 1.000
 				CapButton.BorderSizePixel = 0
 				CapButton.Position = UDim2.new(0, 0, 0, 0)
-				CapButton.Size = UDim2.new(1, 0, 0, 17)
-				CapButton.ZIndex = 11
+				CapButton.Size = Inside and UDim2.new(1, 0, 1, 0) or UDim2.new(1, 0, 0, 17)
+				CapButton.ZIndex = 13
 				CapButton.Text = ''
-
-				local function ItemCount()
-					local n = 0;
-
-					for _ , c in next , SectionHandler:GetChildren() do
-						if c:IsA('GuiObject') then
-							n += 1;
-						end;
-					end;
-
-					return (n == 1) and '1 option' or (tostring(n) .. ' options');
-				end;
-
-				OnSized = function()
-					CountLabel.Text = ItemCount();
-				end;
 
 				local function SetCollapsed(v)
 					v = v and true or false;
@@ -7927,12 +7955,17 @@ function NeverLose:CreateWindow(Config)
 					end;
 
 					Collapsed = v;
-					CountLabel.Text = ItemCount();
-					CountLabel.Visible = v;
 
 					NeverLose.PlayAnimate(Chevron , SlowyTween , {
 						Rotation = v and -90 or 0
 					});
+
+					if Inside then
+						-- свёрнуто: полоса скругляется со всех сторон, чтобы не торчать из углов карточки
+						NeverLose.PlayAnimate(Band , SlowyTween , {
+							Size = UDim2.new(1, 0, 0, v and HeaderH or (HeaderH + 10))
+						});
+					end;
 
 					ApplySectionSize();
 				end;
@@ -7961,14 +7994,6 @@ function NeverLose:CreateWindow(Config)
 					NeverLose.PlayAnimate(Chevron , SlowyTween , { TextTransparency = 0.3 });
 				end));
 
-				local function Fade(v)
-					NeverLose.PlayAnimate(Chevron , SlowyTween , { TextTransparency = v and 0.3 or 1 });
-					NeverLose.PlayAnimate(CountLabel , SlowyTween , { TextTransparency = v and 0.5 or 1 });
-				end;
-
-				Tab.Signal:Connect(Fade);
-				Fade(Tab.Signal:GetValue());
-
 				if Config.Flag then
 					NeverLose.Flags[Config.Flag] = {
 						GetValue = function()
@@ -7981,6 +8006,10 @@ function NeverLose:CreateWindow(Config)
 				end;
 			end;
 
+			if Inside or Config.Collapsible then
+				Tab.Signal:Connect(Fade);
+				Fade(Tab.Signal:GetValue());
+			end;
 
 			Section.SetRender = LPH_NO_VIRTUALIZE(function(value)
 				if value then
