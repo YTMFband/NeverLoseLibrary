@@ -5316,6 +5316,250 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 		return Lib;
 	end;
 
+	-- ШИРОКИЙ SQUIRCLE slider: подпись слева сверху, значение справа сверху, ниже широкая полоса 26px со скруглёнными углами (в стиле squircle-тогла)
+	-- Параметры и значения те же, что у AddSlider (Min, Max, Default, Rounding, Type, Nums, Flag, Callback)
+	function idx:AddWideSquircleSlider(Config)
+		Config = NeverLose:ProcessParams(Config , {
+			Name = 'Slider',
+			Default = 50,
+			Min = 0,
+			Max = 10,
+			Type = '',          -- суффикс значения: '%', 'px', ...
+			Rounding = 0,
+			Nums = {},          -- { [значение] = 'текст' }
+			Flag = nil,
+			Callback = EmptyFunction,
+		});
+
+		Config.Default = math.clamp(Config.Default , Config.Min , Config.Max);
+
+		local Z = LayerIndex;
+		local Lib = {};
+		local IsHold = false;
+
+		local function span()
+			return math.max(Config.Max - Config.Min , 1e-9);
+		end;
+
+		local function scale()
+			return (Config.Default - Config.Min) / span();
+		end;
+
+		local function make(class , props , parent)
+			local obj = Instance.new(class);
+
+			obj.Name = NeverLose.RandomString();
+
+			if obj:IsA('GuiObject') then
+				obj.BorderSizePixel = 0;
+				obj.BorderColor3 = Color3.fromRGB(0 , 0 , 0);
+			end;
+
+			for k , v in next , props do
+				obj[k] = v;
+			end;
+
+			obj.Parent = parent;
+
+			return obj;
+		end;
+
+		local FullNumSize = NeverLose.GetTextSize(string.rep('0' , (Config.Rounding + #tostring(Config.Max)) + 1) .. tostring(Config.Type) , 10 , Enum.Font.GothamMedium , Vector2.new(math.huge , math.huge));
+		local ValueW = FullNumSize.X + 12;
+
+		local Root = make('Frame' , {
+			BackgroundTransparency = 1,
+			Size = UDim2.new(1 , 0 , 0 , 58),
+			ZIndex = Z + 8,
+		} , Frame);
+
+		NeverLose:AddQuery(Root , Config.Name);
+
+		local NameLabel = make('TextLabel' , {
+			BackgroundTransparency = 1,
+			Position = UDim2.new(0 , 11 , 0 , 5),
+			Size = UDim2.new(1 , -(ValueW + 30) , 0 , 16),
+			ZIndex = Z + 9,
+			Font = Enum.Font.GothamMedium,
+			Text = Config.Name,
+			TextColor3 = Color3.fromRGB(255 , 255 , 255),
+			TextSize = 13,
+			TextTransparency = 0.35,
+			TextTruncate = Enum.TextTruncate.AtEnd,
+			TextXAlignment = Enum.TextXAlignment.Left,
+		} , Root);
+
+		make('Frame' , {
+			AnchorPoint = Vector2.new(0.5 , 1),
+			BackgroundColor3 = Color3.fromRGB(45 , 48 , 58),
+			BackgroundTransparency = 0.65,
+			Position = UDim2.new(0.5 , 0 , 1 , 0),
+			Size = UDim2.new(1 , -20 , 0 , 1),
+			ZIndex = Z + 11,
+		} , Root);
+
+		----------------------------------------------------------- значение (можно нажать и ввести число)
+		local ValueFrame = make('Frame' , {
+			AnchorPoint = Vector2.new(1 , 0),
+			BackgroundColor3 = Color3.fromRGB(26 , 28 , 36),
+			Position = UDim2.new(1 , -11 , 0 , 4),
+			Size = UDim2.new(0 , ValueW , 0 , 18),
+			ZIndex = Z + 10,
+		} , Root);
+		make('UICorner' , { CornerRadius = UDim.new(0 , 4) } , ValueFrame);
+		make('UIStroke' , { Color = Color3.fromRGB(45 , 48 , 58) , Transparency = 0.65 } , ValueFrame);
+
+		local ValueBox = make('TextBox' , {
+			BackgroundTransparency = 1,
+			Size = UDim2.new(1 , 0 , 1 , 0),
+			ZIndex = Z + 11,
+			ClearTextOnFocus = false,
+			Font = Enum.Font.GothamMedium,
+			Text = '',
+			TextColor3 = Color3.fromRGB(255 , 255 , 255),
+			TextSize = 10,
+			TextTransparency = 0.35,
+		} , ValueFrame);
+
+		----------------------------------------------------------- ползунок (squircle bar)
+		local BarH = 26;
+
+		local SlideMain = make('Frame' , {
+			BackgroundColor3 = Color3.fromRGB(10 , 13 , 21),
+			ClipsDescendants = true,
+			Position = UDim2.new(0 , 11 , 0 , 26),
+			Size = UDim2.new(1 , -22 , 0 , BarH),
+			ZIndex = Z + 9,
+		} , Root);
+		make('UICorner' , { CornerRadius = UDim.new(0 , 9) } , SlideMain);
+		make('UIStroke' , { Color = Color3.fromRGB(45 , 48 , 58) , Transparency = 0.1 } , SlideMain);
+
+		local SlideMoving = make('Frame' , {
+			BackgroundColor3 = NeverLose.AccentColor,
+			Size = UDim2.new(scale() , 0 , 1 , 0),
+			ZIndex = Z + 10,
+		} , SlideMain);
+		make('UICorner' , { CornerRadius = UDim.new(0 , 8) } , SlideMoving);
+		make('UISizeConstraint' , { MinSize = Vector2.new(14 , 0) } , SlideMoving);
+
+		-- белая ручка на конце заливки
+		local Knob = make('Frame' , {
+			AnchorPoint = Vector2.new(1 , 0.5),
+			BackgroundColor3 = Color3.fromRGB(255 , 255 , 255),
+			BackgroundTransparency = 0.15,
+			Position = UDim2.new(1 , -5 , 0.5 , 0),
+			Size = UDim2.new(0 , 3 , 1 , -14),
+			ZIndex = Z + 11,
+		} , SlideMoving);
+		make('UICorner' , { CornerRadius = UDim.new(0 , 2) } , Knob);
+
+		local function loadText()
+			if Config.Nums[Config.Default] then
+				ValueBox.Text = tostring(Config.Nums[Config.Default]);
+			else
+				ValueBox.Text = tostring(Config.Default) .. tostring(Config.Type);
+			end;
+		end;
+
+		local function grow(on)
+			NeverLose.PlayAnimate(Knob , SlowyTween , { Size = on and UDim2.new(0 , 5 , 1 , -10) or UDim2.new(0 , 3 , 1 , -14) });
+		end;
+
+		local function apply(value , fire)
+			Config.Default = value;
+
+			TweenService:Create(SlideMoving , ManualTween , { Size = UDim2.new(scale() , 0 , 1 , 0) }):Play();
+
+			loadText();
+
+			if fire then
+				Config.Callback(Config.Default);
+			end;
+		end;
+
+		local function update(Input)
+			local sc = math.clamp((Input.Position.X - SlideMain.AbsolutePosition.X) / math.max(SlideMain.AbsoluteSize.X , 1) , 0 , 1);
+			local value = NeverLose.Rounding((span() * sc) + Config.Min , Config.Rounding);
+
+			apply(value , true);
+		end;
+
+		NeverLose:AddSignal(SlideMain.InputBegan:Connect(function(Input)
+			if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
+				IsHold = true;
+				grow(true);
+				update(Input);
+			end;
+		end));
+
+		NeverLose:AddSignal(UserInputService.InputEnded:Connect(function(Input)
+			if IsHold and (Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch) then
+				IsHold = false;
+				grow(false);
+			end;
+		end));
+
+		NeverLose:AddSignal(UserInputService.InputChanged:Connect(function(Input)
+			if IsHold and (Input.UserInputType == Enum.UserInputType.MouseMovement or Input.UserInputType == Enum.UserInputType.Touch) then
+				if UserInputService.TouchEnabled and not NeverLose:IsMouseOverFrame(SlideMain) then
+					IsHold = false; -- палец ушёл с ползунка: отдаём жест прокрутке
+					grow(false);
+				else
+					update(Input);
+				end;
+			end;
+		end));
+
+		NeverLose:AddSignal(ValueBox.FocusLost:Connect(function()
+			local out = NeverLose:ParseInput(ValueBox.Text , true);
+
+			if out then
+				apply(NeverLose.Rounding(math.clamp(out , Config.Min , Config.Max) , Config.Rounding) , true);
+			else
+				loadText();
+			end;
+		end));
+
+		function Lib:GetValue()
+			return Config.Default;
+		end;
+
+		function Lib:SetValue(v)
+			if type(v) ~= 'number' then
+				return;
+			end;
+
+			apply(math.clamp(v , Config.Min , Config.Max) , true);
+		end;
+
+		function Lib:SetName(n)
+			Config.Name = n;
+			NameLabel.Text = n;
+		end;
+
+		function Lib:Destroy()
+			Root:Destroy();
+		end;
+
+		Root.Visible = Signel:GetValue() and true or false;
+
+		Signel:Connect(function(v)
+			Root.Visible = v and true or false;
+		end);
+
+		Lib.Root = Root;
+
+		loadText();
+
+		if Config.Flag then
+			NeverLose.Flags[Config.Flag] = Lib;
+		end;
+
+		return Lib;
+	end;
+
+	idx.AddWideSquirSlider = idx.AddWideSquircleSlider; -- короткое имя
+
 	-- ШИРОКИЙ toggle (squircle): название (+ необязательное описание) слева, квадратно-скруглённый переключатель справа.
 	-- Нажимается вся строка. Параметры и значения как у AddToggle (Default, Flag, Callback).
 	function idx:AddWideToggle(Config)
@@ -5362,7 +5606,7 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 		local NameLabel = make('TextLabel' , {
 			BackgroundTransparency = 1,
 			Position = UDim2.new(0 , 11 , 0 , HasDesc and 7 or 0),
-			Size = UDim2.new(1 , -72 , 0 , HasDesc and 16 or RowH),
+			Size = UDim2.new(1 , -64 , 0 , HasDesc and 16 or RowH),
 			ZIndex = Z + 9,
 			Font = Enum.Font.GothamMedium,
 			Text = Config.Name,
@@ -5376,7 +5620,7 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 		local DescLabel = make('TextLabel' , {
 			BackgroundTransparency = 1,
 			Position = UDim2.new(0 , 11 , 0 , 25),
-			Size = UDim2.new(1 , -72 , 0 , 14),
+			Size = UDim2.new(1 , -64 , 0 , 14),
 			Visible = HasDesc,
 			ZIndex = Z + 9,
 			Font = Enum.Font.GothamMedium,
@@ -5402,10 +5646,10 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 			AnchorPoint = Vector2.new(1 , 0.5),
 			BackgroundColor3 = Color3.fromRGB(10 , 13 , 21),
 			Position = UDim2.new(1 , -11 , 0.5 , 0),
-			Size = UDim2.new(0 , 40 , 0 , 22),
+			Size = UDim2.new(0 , 32 , 0 , 20),
 			ZIndex = Z + 10,
 		} , Root);
-		make('UICorner' , { CornerRadius = UDim.new(0 , 8) } , Track);
+		make('UICorner' , { CornerRadius = UDim.new(0 , 7) } , Track);
 
 		local TrackStroke = make('UIStroke' , {
 			Color = Color3.fromRGB(45 , 48 , 58),
@@ -5416,10 +5660,10 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 			AnchorPoint = Vector2.new(0 , 0.5),
 			BackgroundColor3 = Color3.fromRGB(138 , 143 , 158),
 			Position = UDim2.new(0 , 3 , 0.5 , 0),
-			Size = UDim2.new(0 , 16 , 0 , 16),
+			Size = UDim2.new(0 , 14 , 0 , 14),
 			ZIndex = Z + 11,
 		} , Track);
-		make('UICorner' , { CornerRadius = UDim.new(0 , 6) } , Knob);
+		make('UICorner' , { CornerRadius = UDim.new(0 , 5) } , Knob);
 
 		local function paint(value)
 			if value then
@@ -5427,7 +5671,7 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 				NeverLose.PlayAnimate(TrackStroke , SlowyTween , { Color = NeverLose.AccentColor , Transparency = 0 });
 				NeverLose.PlayAnimate(Knob , SlowyTween , {
 					BackgroundColor3 = Color3.fromRGB(255 , 255 , 255),
-					Position = UDim2.new(0 , 21 , 0.5 , 0),
+					Position = UDim2.new(0 , 15 , 0.5 , 0),
 				});
 			else
 				NeverLose.PlayAnimate(Track , SlowyTween , { BackgroundColor3 = Color3.fromRGB(10 , 13 , 21) });
