@@ -5328,6 +5328,7 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 			Rounding = 0,
 			Nums = {},          -- { [значение] = 'текст' }
 			Flag = nil,
+			Size = nil,         -- масштаб ВСЕГО слайдера: nil/1 = как сейчас, 0.85 = меньше, или 'Small' / 'Medium' / 'Default' / 'Large'
 			Callback = EmptyFunction,
 		});
 
@@ -5336,6 +5337,27 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 		local Z = LayerIndex;
 		local Lib = {};
 		local IsHold = false;
+
+		-- масштаб всего элемента (подпись, значение, полоса, ручка, отступы); без Size всё как раньше
+		local UIScale = 1;
+
+		if type(Config.Size) == 'number' then
+			UIScale = Config.Size;
+		elseif type(Config.Size) == 'string' then
+			UIScale = ({ small = 0.8 , medium = 0.9 , default = 1 , large = 1.1 })[string.lower(Config.Size)] or 1;
+		end;
+
+		UIScale = math.clamp(UIScale , 0.6 , 1.4);
+
+		local function S(n)
+			return math.floor(n * UIScale + 0.5);
+		end;
+
+		local NameSize = math.clamp(S(13) , 9 , 15);
+		local ValText = math.max(S(10) , 9);
+		local BarY = S(26);
+		local BarH = S(26);
+		local RootH = BarY + BarH + S(6);
 
 		local function span()
 			return math.max(Config.Max - Config.Min , 1e-9);
@@ -5364,12 +5386,12 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 			return obj;
 		end;
 
-		local FullNumSize = NeverLose.GetTextSize(string.rep('0' , (Config.Rounding + #tostring(Config.Max)) + 1) .. tostring(Config.Type) , 10 , Enum.Font.GothamMedium , Vector2.new(math.huge , math.huge));
-		local ValueW = FullNumSize.X + 12;
+		local FullNumSize = NeverLose.GetTextSize(string.rep('0' , (Config.Rounding + #tostring(Config.Max)) + 1) .. tostring(Config.Type) , ValText , Enum.Font.GothamMedium , Vector2.new(math.huge , math.huge));
+		local ValueW = FullNumSize.X + S(12);
 
 		local Root = make('Frame' , {
 			BackgroundTransparency = 1,
-			Size = UDim2.new(1 , 0 , 0 , 58),
+			Size = UDim2.new(1 , 0 , 0 , RootH),
 			ZIndex = Z + 8,
 		} , Frame);
 
@@ -5377,13 +5399,13 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 
 		local NameLabel = make('TextLabel' , {
 			BackgroundTransparency = 1,
-			Position = UDim2.new(0 , 11 , 0 , 5),
-			Size = UDim2.new(1 , -(ValueW + 30) , 0 , 16),
+			Position = UDim2.new(0 , 11 , 0 , S(5)),
+			Size = UDim2.new(1 , -(ValueW + 30) , 0 , S(16)),
 			ZIndex = Z + 9,
 			Font = Enum.Font.GothamMedium,
 			Text = Config.Name,
 			TextColor3 = Color3.fromRGB(255 , 255 , 255),
-			TextSize = 13,
+			TextSize = NameSize,
 			TextTransparency = 0.35,
 			TextTruncate = Enum.TextTruncate.AtEnd,
 			TextXAlignment = Enum.TextXAlignment.Left,
@@ -5402,11 +5424,11 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 		local ValueFrame = make('Frame' , {
 			AnchorPoint = Vector2.new(1 , 0),
 			BackgroundColor3 = Color3.fromRGB(26 , 28 , 36),
-			Position = UDim2.new(1 , -11 , 0 , 4),
-			Size = UDim2.new(0 , ValueW , 0 , 18),
+			Position = UDim2.new(1 , -11 , 0 , S(4)),
+			Size = UDim2.new(0 , ValueW , 0 , S(18)),
 			ZIndex = Z + 10,
 		} , Root);
-		make('UICorner' , { CornerRadius = UDim.new(0 , 4) } , ValueFrame);
+		make('UICorner' , { CornerRadius = UDim.new(0 , S(4)) } , ValueFrame);
 		make('UIStroke' , { Color = Color3.fromRGB(45 , 48 , 58) , Transparency = 0.65 } , ValueFrame);
 
 		local ValueBox = make('TextBox' , {
@@ -5417,21 +5439,19 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 			Font = Enum.Font.GothamMedium,
 			Text = '',
 			TextColor3 = Color3.fromRGB(255 , 255 , 255),
-			TextSize = 10,
+			TextSize = ValText,
 			TextTransparency = 0.35,
 		} , ValueFrame);
 
 		----------------------------------------------------------- ползунок (squircle bar)
-		local BarH = 26;
-
 		local SlideMain = make('Frame' , {
 			BackgroundColor3 = Color3.fromRGB(10 , 13 , 21),
 			ClipsDescendants = true,
-			Position = UDim2.new(0 , 11 , 0 , 26),
+			Position = UDim2.new(0 , 11 , 0 , BarY),
 			Size = UDim2.new(1 , -22 , 0 , BarH),
 			ZIndex = Z + 9,
 		} , Root);
-		make('UICorner' , { CornerRadius = UDim.new(0 , 9) } , SlideMain);
+		make('UICorner' , { CornerRadius = UDim.new(0 , S(9)) } , SlideMain);
 		make('UIStroke' , { Color = Color3.fromRGB(45 , 48 , 58) , Transparency = 0.1 } , SlideMain);
 
 		local SlideMoving = make('Frame' , {
@@ -5439,16 +5459,16 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 			Size = UDim2.new(scale() , 0 , 1 , 0),
 			ZIndex = Z + 10,
 		} , SlideMain);
-		make('UICorner' , { CornerRadius = UDim.new(0 , 8) } , SlideMoving);
-		make('UISizeConstraint' , { MinSize = Vector2.new(14 , 0) } , SlideMoving);
+		make('UICorner' , { CornerRadius = UDim.new(0 , S(8)) } , SlideMoving);
+		make('UISizeConstraint' , { MinSize = Vector2.new(S(14) , 0) } , SlideMoving);
 
 		-- белая ручка на конце заливки
 		local Knob = make('Frame' , {
 			AnchorPoint = Vector2.new(1 , 0.5),
 			BackgroundColor3 = Color3.fromRGB(255 , 255 , 255),
 			BackgroundTransparency = 0.15,
-			Position = UDim2.new(1 , -5 , 0.5 , 0),
-			Size = UDim2.new(0 , 3 , 1 , -14),
+			Position = UDim2.new(1 , -S(5) , 0.5 , 0),
+			Size = UDim2.new(0 , math.max(S(3) , 2) , 1 , -S(14)),
 			ZIndex = Z + 11,
 		} , SlideMoving);
 		make('UICorner' , { CornerRadius = UDim.new(0 , 2) } , Knob);
@@ -5462,7 +5482,7 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 		end;
 
 		local function grow(on)
-			NeverLose.PlayAnimate(Knob , SlowyTween , { Size = on and UDim2.new(0 , 5 , 1 , -10) or UDim2.new(0 , 3 , 1 , -14) });
+			NeverLose.PlayAnimate(Knob , SlowyTween , { Size = on and UDim2.new(0 , math.max(S(5) , 3) , 1 , -S(10)) or UDim2.new(0 , math.max(S(3) , 2) , 1 , -S(14)) });
 		end;
 
 		local function apply(value , fire)
