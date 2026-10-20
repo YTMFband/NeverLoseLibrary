@@ -6285,6 +6285,12 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 
 		NeverLose:AddQuery(Holder , Config.Name);
 
+		local HolderPadding = Instance.new('UIPadding');
+
+		HolderPadding.Parent = Holder;
+		HolderPadding.PaddingLeft = UDim.new(0 , 11);
+		HolderPadding.PaddingRight = UDim.new(0 , 11);
+
 		local Btn = Instance.new('Frame');
 
 		Btn.Name = NeverLose.RandomString();
@@ -6350,7 +6356,7 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 		Label.LayoutOrder = 2;
 		Label.AutomaticSize = Enum.AutomaticSize.XY;
 		Label.Size = UDim2.fromOffset(0 , 0);
-		Label.Font = Enum.Font.GothamMedium;
+		Label.FontFace = Font.new('rbxasset://fonts/families/GothamSSm.json' , Enum.FontWeight.Medium);
 		Label.Text = Config.Name;
 		Label.TextColor3 = NeverLose.Theme.Text;
 		Label.TextSize = 12;
