@@ -6402,24 +6402,44 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 			Config.Callback(Button);
 		end));
 
+		local Hovered , Pressed = false , false;
+
+		local function paint()
+			if Pressed then
+				NeverLose.PlayAnimate(Btn , FastTween , { BackgroundColor3 = NeverLose.Theme.Deep2 });
+			elseif Hovered then
+				NeverLose.PlayAnimate(Btn , SlowyTween , { BackgroundColor3 = NeverLose.Theme.Hover });
+			else
+				NeverLose.PlayAnimate(Btn , SlowyTween , { BackgroundColor3 = NeverLose.Theme.Field });
+			end;
+		end;
+
+		local function setScale(v , info)
+			NeverLose.PlayAnimate(BtnScale , info , { Scale = v });
+		end;
+
 		NeverLose:AddSignal(bth.MouseEnter:Connect(LPH_NO_VIRTUALIZE(function()
-			NeverLose.PlayAnimate(Btn , SlowyTween , {
-				BackgroundColor3 = NeverLose.Theme.Hover,
-			});
+			Hovered = true;
+			paint();
 		end)));
 
 		NeverLose:AddSignal(bth.MouseLeave:Connect(LPH_NO_VIRTUALIZE(function()
-			NeverLose.PlayAnimate(Btn , SlowyTween , {
-				BackgroundColor3 = NeverLose.Theme.Field,
-			});
+			Hovered = false;
+			Pressed = false;
+			setScale(1 , SlowyTween);
+			paint();
 		end)));
 
 		NeverLose:AddSignal(bth.MouseButton1Down:Connect(LPH_NO_VIRTUALIZE(function()
-			NeverLose.PlayAnimate(BtnScale , FastTween , { Scale = 0.97 });
+			Pressed = true;
+			setScale(0.94 , FastTween);
+			paint();
 		end)));
 
 		NeverLose:AddSignal(bth.MouseButton1Up:Connect(LPH_NO_VIRTUALIZE(function()
-			NeverLose.PlayAnimate(BtnScale , FastTween , { Scale = 1 });
+			Pressed = false;
+			setScale(1 , SlowyTween);
+			paint();
 		end)));
 
 		NeverLose.ThemeListeners[#NeverLose.ThemeListeners + 1] = function()
