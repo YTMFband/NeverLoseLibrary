@@ -6280,7 +6280,7 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 		Holder.Parent = Frame;
 		Holder.BackgroundTransparency = 1;
 		Holder.BorderSizePixel = 0;
-		Holder.Size = UDim2.new(1 , 0 , 0 , 36);
+		Holder.Size = UDim2.new(1 , 0 , 0 , 28);
 		Holder.ZIndex = LayerIndex + 8;
 
 		NeverLose:AddQuery(Holder , Config.Name);
@@ -6296,7 +6296,7 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 
 		local BtnCorner = Instance.new('UICorner');
 
-		BtnCorner.CornerRadius = UDim.new(0 , 8);
+		BtnCorner.CornerRadius = UDim.new(0 , 6);
 		BtnCorner.Parent = Btn;
 
 		local BtnStroke = Instance.new('UIStroke');
@@ -6322,7 +6322,7 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 		ContentLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center;
 		ContentLayout.VerticalAlignment = Enum.VerticalAlignment.Center;
 		ContentLayout.SortOrder = Enum.SortOrder.LayoutOrder;
-		ContentLayout.Padding = UDim.new(0 , 8);
+		ContentLayout.Padding = UDim.new(0 , 6);
 
 		local Icon = Instance.new('TextLabel');
 
@@ -6331,8 +6331,8 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 		Icon.BackgroundTransparency = 1;
 		Icon.BorderSizePixel = 0;
 		Icon.LayoutOrder = 1;
-		Icon.Size = UDim2.fromOffset(16 , 16);
-		Icon.TextSize = 16;
+		Icon.Size = UDim2.fromOffset(13 , 13);
+		Icon.TextSize = 13;
 		Icon.TextColor3 = NeverLose.Theme.Accent;
 		Icon.ZIndex = LayerIndex + 11;
 		Icon.Visible = Config.Icon ~= nil;
@@ -6353,7 +6353,7 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 		Label.Font = Enum.Font.GothamMedium;
 		Label.Text = Config.Name;
 		Label.TextColor3 = NeverLose.Theme.Text;
-		Label.TextSize = 13;
+		Label.TextSize = 12;
 		Label.ZIndex = LayerIndex + 11;
 
 		local Button = {};
