@@ -5827,8 +5827,9 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 			return math.floor(n * UIScale + 0.5);
 		end;
 
-		local NameSize = math.clamp(S(13) , 9 , 15);
-		local ValText = math.max(S(10) , 9);
+		-- размер текста не масштабируется: Size меняет только геометрию
+		local NameSize = 13;
+		local ValText = 10;
 		local BarY = S(26);
 		local BarH = S(26);
 		local RootH = BarY + BarH + S(6);
@@ -5885,7 +5886,7 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 			TextXAlignment = Enum.TextXAlignment.Left,
 		} , Root);
 
-		make('Frame' , {
+		local Divider = make('Frame' , {
 			AnchorPoint = Vector2.new(0.5 , 1),
 			BackgroundColor3 = NeverLose.Theme.Stroke,
 			BackgroundTransparency = 0.65,
@@ -5903,7 +5904,7 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 			ZIndex = Z + 10,
 		} , Root);
 		make('UICorner' , { CornerRadius = UDim.new(0 , S(4)) } , ValueFrame);
-		make('UIStroke' , { Color = NeverLose.Theme.Stroke , Transparency = 0.65 } , ValueFrame);
+		local ValueStroke = make('UIStroke' , { Color = NeverLose.Theme.Stroke , Transparency = 0.65 } , ValueFrame);
 
 		local ValueBox = make('TextBox' , {
 			BackgroundTransparency = 1,
@@ -5926,7 +5927,7 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 			ZIndex = Z + 9,
 		} , Root);
 		make('UICorner' , { CornerRadius = UDim.new(0 , S(9)) } , SlideMain);
-		make('UIStroke' , { Color = NeverLose.Theme.Stroke , Transparency = 0.1 } , SlideMain);
+		local SlideStroke = make('UIStroke' , { Color = NeverLose.Theme.Stroke , Transparency = 0.1 } , SlideMain);
 
 		local SlideMoving = make('Frame' , {
 			BackgroundColor3 = NeverLose.AccentColor,
@@ -6013,6 +6014,22 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 				loadText();
 			end;
 		end));
+
+		-- перекраска при смене темы: напрямую, без подбора по цвету
+		NeverLose.ThemeListeners[#NeverLose.ThemeListeners + 1] = function()
+			if not Root.Parent then
+				return false;
+			end;
+
+			NameLabel.TextColor3 = NeverLose.Theme.Text;
+			Divider.BackgroundColor3 = NeverLose.Theme.Stroke;
+			ValueFrame.BackgroundColor3 = NeverLose.Theme.Field;
+			ValueStroke.Color = NeverLose.Theme.Stroke;
+			ValueBox.TextColor3 = NeverLose.Theme.Text;
+			SlideMain.BackgroundColor3 = NeverLose.Theme.Deep;
+			SlideStroke.Color = NeverLose.Theme.Stroke;
+			SlideMoving.BackgroundColor3 = NeverLose.Theme.Accent;
+		end;
 
 		function Lib:GetValue()
 			return Config.Default;
@@ -6285,6 +6302,10 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 
 		NeverLose:AddQuery(Holder , Config.Name);
 
+		local BtnScale = Instance.new('UIScale');
+
+		BtnScale.Parent = Btn;
+
 		local HolderPadding = Instance.new('UIPadding');
 
 		HolderPadding.Parent = Holder;
@@ -6391,6 +6412,25 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 				BackgroundColor3 = NeverLose.Theme.Field,
 			});
 		end)));
+
+		NeverLose:AddSignal(bth.MouseButton1Down:Connect(LPH_NO_VIRTUALIZE(function()
+			NeverLose.PlayAnimate(BtnScale , FastTween , { Scale = 0.97 });
+		end)));
+
+		NeverLose:AddSignal(bth.MouseButton1Up:Connect(LPH_NO_VIRTUALIZE(function()
+			NeverLose.PlayAnimate(BtnScale , FastTween , { Scale = 1 });
+		end)));
+
+		NeverLose.ThemeListeners[#NeverLose.ThemeListeners + 1] = function()
+			if not Holder.Parent then
+				return false;
+			end;
+
+			Btn.BackgroundColor3 = NeverLose.Theme.Field;
+			BtnStroke.Color = NeverLose.Theme.Stroke;
+			Icon.TextColor3 = NeverLose.Theme.Accent;
+			Label.TextColor3 = NeverLose.Theme.Text;
+		end;
 
 		return Button;
 	end;
