@@ -5063,8 +5063,9 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 			return math.floor(n * Scale + 0.5);
 		end;
 
-		local NameSize = math.clamp(S(13) , 9 , 15);
-		local FontSize = math.clamp(S(12) , 9 , 14);
+		-- размер текста не масштабируется: Size меняет только геометрию
+		local NameSize = 13;
+		local FontSize = 12;
 		local IconSize = math.clamp(S(16) , 11 , 18);
 		local ChevSize = S(20);
 		local FieldY = S(26);
