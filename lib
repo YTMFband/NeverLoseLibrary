@@ -6264,477 +6264,129 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 		});
 	end;
 
-	-- ===================== ШИРОКАЯ КНОПКА =====================
-	-- Section:AddWideButton({ Name = 'Save config', Style = 'Primary', Icon = 'save', Callback = function(btn) end })
-	-- Section:AddWideButtonRow({ { Name = 'Load', Style = 'Secondary' } , { Name = 'Export', Style = 'Ghost' } })
-	-- Style: 'Primary' | 'Secondary' | 'Ghost' | 'Danger' | 'List' (крупная строка; включается сама, если есть Description)
-	local WB_RED = Color3.fromRGB(230 , 57 , 70);
-	local WB_REDTXT = Color3.fromRGB(255 , 107 , 118);
-	local WB_GREEN = Color3.fromRGB(34 , 196 , 136);
-
-	-- цвет текста на акцентной кнопке: тёмный на светлом акценте, белый на тёмном
-	local function WBOnAccent()
-		local a = NeverLose.Theme.Accent;
-
-		if (a.R * 0.299 + a.G * 0.587 + a.B * 0.114) > 0.6 then
-			return Color3.fromRGB(11 , 11 , 16);
-		end;
-
-		return Color3.fromRGB(255 , 255 , 255);
-	end;
-
-	local function WBBuild(Parent , Cfg , Size , Z)
-		local Lib = {};
-		local Style = Cfg.Style;
-		local IsList = (type(Cfg.Description) == 'string' and Cfg.Description ~= '') or Style == 'List';
-
-		if Style == 'List' then
-			Style = 'Secondary';
-		end;
-
-		local Height = IsList and 46 or (Cfg.Small and 28 or 34);
-		local Disabled = Cfg.Disabled == true;
-		local Busy , Hover , Done = false , false , false;
-
-		local function make(class , props , parent)
-			local o = Instance.new(class);
-
-			o.Name = NeverLose.RandomString();
-
-			if o:IsA('GuiObject') then
-				o.BorderSizePixel = 0;
-			end;
-
-			for k , v in pairs(props) do
-				o[k] = v;
-			end;
-
-			o.Parent = parent;
-
-			return o;
-		end;
-
-		local Btn = make('TextButton' , {
-			AutoButtonColor = false,
-			ClipsDescendants = true,
-			Size = Size,
-			Text = '',
-			ZIndex = Z + 9,
-		} , Parent);
-
-		make('UICorner' , { CornerRadius = UDim.new(0 , IsList and 10 or (Cfg.Small and 7 or 8)) } , Btn);
-
-		local Stroke = make('UIStroke' , { Thickness = 1 , ApplyStrokeMode = Enum.ApplyStrokeMode.Border } , Btn);
-		local Scale = make('UIScale' , {} , Btn);
-
-		local BtnFont = Font.new('rbxasset://fonts/families/GothamSSm.json' , Enum.FontWeight.SemiBold);
-		local Title , Desc , Icon , Tile , Chev , Spinner , SpinGrad;
-
-		local function newSpinner(parent)
-			local sp = make('Frame' , { BackgroundTransparency = 1 , Size = UDim2.fromOffset(14 , 14) , ZIndex = Z + 11 , Visible = false } , parent);
-
-			make('UICorner' , { CornerRadius = UDim.new(1 , 0) } , sp);
-
-			local st = make('UIStroke' , { Thickness = 2 , ApplyStrokeMode = Enum.ApplyStrokeMode.Border } , sp);
-
-			SpinGrad = make('UIGradient' , {
-				Transparency = NumberSequence.new({
-					NumberSequenceKeypoint.new(0 , 0),
-					NumberSequenceKeypoint.new(0.5 , 0),
-					NumberSequenceKeypoint.new(0.51 , 1),
-					NumberSequenceKeypoint.new(1 , 1),
-				}),
-			} , st);
-
-			return sp , st;
-		end;
-
-		local SpinStroke;
-
-		if not IsList then
-			local Content = make('Frame' , { BackgroundTransparency = 1 , Size = UDim2.fromScale(1 , 1) , ZIndex = Z + 10 } , Btn);
-
-			make('UIListLayout' , {
-				FillDirection = Enum.FillDirection.Horizontal,
-				HorizontalAlignment = Enum.HorizontalAlignment.Center,
-				VerticalAlignment = Enum.VerticalAlignment.Center,
-				SortOrder = Enum.SortOrder.LayoutOrder,
-				Padding = UDim.new(0 , 8),
-			} , Content);
-
-			Spinner , SpinStroke = newSpinner(Content);
-			Spinner.LayoutOrder = 1;
-
-			if Cfg.Icon then
-				Icon = make('TextLabel' , {
-					BackgroundTransparency = 1,
-					LayoutOrder = 2,
-					Size = UDim2.fromOffset(16 , 16),
-					TextSize = 16,
-					ZIndex = Z + 11,
-				} , Content);
-
-				NeverLose:SetIconMode(Icon , Cfg.Icon);
-			end;
-
-			Title = make('TextLabel' , {
-				AutomaticSize = Enum.AutomaticSize.XY,
-				BackgroundTransparency = 1,
-				LayoutOrder = 3,
-				Size = UDim2.fromOffset(0 , 0),
-				FontFace = BtnFont,
-				Text = Cfg.Name,
-				TextSize = Cfg.Small and 12 or 13,
-				ZIndex = Z + 11,
-			} , Content);
-		else
-			local left = 12;
-
-			if Cfg.Icon then
-				Tile = make('Frame' , {
-					AnchorPoint = Vector2.new(0 , 0.5),
-					Position = UDim2.new(0 , 10 , 0.5 , 0),
-					Size = UDim2.fromOffset(30 , 30),
-					ZIndex = Z + 10,
-				} , Btn);
-
-				make('UICorner' , { CornerRadius = UDim.new(0 , 8) } , Tile);
-				make('UIStroke' , { Thickness = 1 } , Tile);
-
-				Icon = make('TextLabel' , { BackgroundTransparency = 1 , Size = UDim2.fromScale(1 , 1) , TextSize = 16 , ZIndex = Z + 11 } , Tile);
-				NeverLose:SetIconMode(Icon , Cfg.Icon);
-				left = 50;
-			end;
-
-			Title = make('TextLabel' , {
-				BackgroundTransparency = 1,
-				Position = UDim2.new(0 , left , 0 , 7),
-				Size = UDim2.new(1 , -(left + 36) , 0 , 16),
-				FontFace = BtnFont,
-				Text = Cfg.Name,
-				TextSize = 13,
-				TextTruncate = Enum.TextTruncate.AtEnd,
-				TextXAlignment = Enum.TextXAlignment.Left,
-				ZIndex = Z + 11,
-			} , Btn);
-
-			Desc = make('TextLabel' , {
-				BackgroundTransparency = 1,
-				Position = UDim2.new(0 , left , 0 , 24),
-				Size = UDim2.new(1 , -(left + 36) , 0 , 14),
-				Font = Enum.Font.GothamMedium,
-				Text = Cfg.Description or '',
-				TextSize = 11,
-				TextTruncate = Enum.TextTruncate.AtEnd,
-				TextXAlignment = Enum.TextXAlignment.Left,
-				ZIndex = Z + 11,
-			} , Btn);
-
-			Chev = make('TextLabel' , {
-				AnchorPoint = Vector2.new(1 , 0.5),
-				BackgroundTransparency = 1,
-				Position = UDim2.new(1 , -12 , 0.5 , -1),
-				Size = UDim2.fromOffset(14 , 20),
-				Font = Enum.Font.GothamMedium,
-				Text = '›',
-				TextSize = 22,
-				ZIndex = Z + 11,
-			} , Btn);
-
-			Spinner , SpinStroke = newSpinner(Btn);
-			Spinner.AnchorPoint = Vector2.new(1 , 0.5);
-			Spinner.Position = UDim2.new(1 , -12 , 0.5 , 0);
-		end;
-
-		-- цвета берутся из активной темы (роли), поэтому кнопка перекрашивается вместе с меню
-		local function paint(instant)
-			local T = NeverLose.Theme;
-			local bg , bgT , st , stT , tx;
-
-			if Done then
-				bg , bgT , st , stT , tx = WB_GREEN , 0 , WB_GREEN , 1 , Color3.fromRGB(255 , 255 , 255);
-			elseif Disabled then
-				bg , bgT , st , stT , tx = T.Field , 0.2 , T.Stroke , 0.4 , T.TextMute;
-			elseif Style == 'Primary' then
-				bg , bgT , st , stT , tx = Hover and T.Accent:Lerp(Color3.new(1 , 1 , 1) , 0.12) or T.Accent , 0 , T.Accent , 1 , WBOnAccent();
-			elseif Style == 'Ghost' then
-				bg , bgT , st , stT , tx = T.Accent , Hover and 0.88 or 1 , T.Accent , 0.45 , T.Accent;
-			elseif Style == 'Danger' then
-				if Hover then
-					bg , bgT , st , stT , tx = WB_RED , 0 , WB_RED , 1 , Color3.fromRGB(255 , 255 , 255);
-				else
-					bg , bgT , st , stT , tx = WB_RED , 0.86 , WB_RED , 0.45 , WB_REDTXT;
-				end;
-			else
-				bg , bgT , st , stT , tx = (IsList and (Hover and T.Elem2 or T.Elem)) or (Hover and T.Elem2 or T.Field) , 0 , Hover and T.Hover or T.Stroke , 0 , Hover and T.Text or T.TextDim;
-			end;
-
-			local function set(inst , props)
-				if instant then
-					for k , v in pairs(props) do
-						inst[k] = v;
-					end;
-				else
-					NeverLose.PlayAnimate(inst , SlowyTween , props);
-				end;
-			end;
-
-			set(Btn , { BackgroundColor3 = bg , BackgroundTransparency = bgT });
-			set(Stroke , { Color = st , Transparency = stT });
-			SpinStroke.Color = tx;
-
-			if IsList then
-				local danger = (Style == 'Danger');
-				local main = Disabled and T.TextMute or (danger and WB_REDTXT or T.Text);
-
-				set(Title , { TextColor3 = (Done and tx) or main });
-				set(Desc , { TextColor3 = Disabled and T.TextMute or T.TextMute });
-				set(Chev , { TextColor3 = T.TextMute });
-
-				if Tile then
-					local tc = danger and WB_RED or T.Accent;
-
-					set(Tile , { BackgroundColor3 = tc , BackgroundTransparency = Disabled and 0.92 or 0.84 });
-					set(Tile:FindFirstChildOfClass('UIStroke') , { Color = tc , Transparency = Disabled and 0.8 or 0.62 });
-					set(Icon , { TextColor3 = Disabled and T.TextMute or (danger and WB_REDTXT or T.Accent) });
-				end;
-			else
-				set(Title , { TextColor3 = tx });
-
-				if Icon then
-					set(Icon , { TextColor3 = tx });
-				end;
-			end;
-		end;
-
-		local SpinTween = nil;
-
-		local function setSpinner(on)
-			Spinner.Visible = on;
-
-			if SpinTween then
-				SpinTween:Cancel();
-				SpinTween = nil;
-			end;
-
-			if on then
-				SpinGrad.Rotation = 0;
-				SpinTween = TweenService:Create(SpinGrad , TweenInfo.new(0.8 , Enum.EasingStyle.Linear , Enum.EasingDirection.Out , -1) , { Rotation = 360 });
-				SpinTween:Play();
-			end;
-
-			if Icon and not IsList then
-				Icon.Visible = not on;
-			end;
-
-			if Chev then
-				Chev.Visible = not on;
-			end;
-		end;
-
-		-- ===== API =====
-		function Lib:Click()
-			if Disabled or Busy then
-				return;
-			end;
-
-			task.spawn(Cfg.Callback , Lib);
-		end;
-
-		function Lib:SetLoading(on , text)
-			Busy = on and true or false;
-			setSpinner(Busy);
-
-			if Busy and text then
-				Title.Text = text;
-			elseif not Done then
-				Title.Text = Cfg.Name;
-			end;
-
-			paint(false);
-		end;
-
-		-- короткое зелёное состояние «готово», потом кнопка возвращается
-		function Lib:Done(text , seconds)
-			Busy = false;
-			setSpinner(false);
-			Done = true;
-			Title.Text = text or 'Done';
-			paint(false);
-
-			task.delay(seconds or 0.9 , function()
-				Done = false;
-				Title.Text = Cfg.Name;
-				paint(false);
-			end);
-		end;
-
-		function Lib:SetText(t)
-			Cfg.Name = t;
-
-			if not Done and not Busy then
-				Title.Text = t;
-			end;
-		end;
-
-		function Lib:SetDescription(t)
-			if Desc then
-				Desc.Text = tostring(t or '');
-			end;
-		end;
-
-		function Lib:SetStyle(s)
-			Style = (s == 'List') and 'Secondary' or s;
-			paint(false);
-		end;
-
-		function Lib:SetDisabled(v)
-			Disabled = v and true or false;
-			paint(false);
-		end;
-
-		function Lib:Destroy()
-			setSpinner(false);
-			Btn:Destroy();
-		end;
-
-		Lib.Button = Btn;
-		Lib.Height = Height;
-
-		NeverLose:AddSignal(Btn.MouseEnter:Connect(function()
-			Hover = true;
-			paint(false);
-		end));
-
-		NeverLose:AddSignal(Btn.MouseLeave:Connect(function()
-			Hover = false;
-			paint(false);
-		end));
-
-		NeverLose:AddSignal(Btn.InputBegan:Connect(function(input)
-			if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) and not Disabled then
-				NeverLose.PlayAnimate(Scale , SlowyTween , { Scale = 0.97 });
-			end;
-		end));
-
-		NeverLose:AddSignal(Btn.InputEnded:Connect(function(input)
-			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-				NeverLose.PlayAnimate(Scale , SlowyTween , { Scale = 1 });
-			end;
-		end));
-
-		NeverLose:AddSignal(Btn.Activated:Connect(function()
-			Lib:Click();
-		end));
-
-		-- при смене темы пересчитываем цвета (например, цвет текста на светлом акценте)
-		NeverLose.ThemeListeners = NeverLose.ThemeListeners or {};
-
-		table.insert(NeverLose.ThemeListeners , function()
-			if not Btn.Parent then
-				return false;
-			end;
-
-			paint(true);
-		end);
-
-		paint(true);
-
-		return Lib;
-	end;
-
-	local function WBRow(List)
-		local Z = LayerIndex;
-		local cfgs , names , maxH = {} , {} , 0;
-
-		for i , c in next , List do
-			c = NeverLose:ProcessParams(c , {
-				Name = 'Button',
-				Description = nil,
-				Icon = nil,
-				Style = 'Primary',
-				Small = false,
-				Disabled = false,
-				Callback = EmptyFunction,
-			});
-
-			cfgs[i] = c;
-			table.insert(names , tostring(c.Name));
-
-			local isList = (type(c.Description) == 'string' and c.Description ~= '') or c.Style == 'List';
-
-			maxH = math.max(maxH , isList and 46 or (c.Small and 28 or 34));
-		end;
-
-		local Root = Instance.new('Frame');
-
-		Root.Name = NeverLose.RandomString();
-		Root.Parent = Frame;
-		Root.BackgroundTransparency = 1;
-		Root.BorderSizePixel = 0;
-		Root.Size = UDim2.new(1 , 0 , 0 , maxH + 16);
-		Root.ZIndex = Z + 8;
-
-		NeverLose:AddQuery(Root , table.concat(names , ' '));
-
-		local Line = Instance.new('Frame');
-
-		Line.Name = NeverLose.RandomString();
-		Line.Parent = Root;
-		Line.AnchorPoint = Vector2.new(0.5 , 1);
-		Line.BackgroundColor3 = NeverLose.Theme.Stroke;
-		Line.BackgroundTransparency = 0.65;
-		Line.BorderSizePixel = 0;
-		Line.Position = UDim2.new(0.5 , 0 , 1 , 0);
-		Line.Size = UDim2.new(1 , -20 , 0 , 1);
-		Line.ZIndex = Z + 11;
+	-- ===================== КНОПКА ВО ВСЮ ШИРИНУ =====================
+	-- Section:AddFieldButton({ Name = 'Save config', Icon = 'save', Callback = function(btn) end })
+	-- полноширинная кнопка в стиле поля: рамка, фон Field, иконка в акценте
+	function idx:AddFieldButton(Config)
+		Config = NeverLose:ProcessParams(Config , {
+			Name = 'Button',
+			Icon = nil,
+			Callback = EmptyFunction,
+		});
 
 		local Holder = Instance.new('Frame');
 
 		Holder.Name = NeverLose.RandomString();
-		Holder.Parent = Root;
+		Holder.Parent = Frame;
 		Holder.BackgroundTransparency = 1;
 		Holder.BorderSizePixel = 0;
-		Holder.Position = UDim2.new(0 , 11 , 0 , 8);
-		Holder.Size = UDim2.new(1 , -22 , 0 , maxH);
-		Holder.ZIndex = Z + 8;
+		Holder.Size = UDim2.new(1 , 0 , 0 , 36);
+		Holder.ZIndex = LayerIndex + 8;
 
-		local Layout = Instance.new('UIListLayout');
+		NeverLose:AddQuery(Holder , Config.Name);
 
-		Layout.Parent = Holder;
-		Layout.FillDirection = Enum.FillDirection.Horizontal;
-		Layout.VerticalAlignment = Enum.VerticalAlignment.Center;
-		Layout.SortOrder = Enum.SortOrder.LayoutOrder;
-		Layout.Padding = UDim.new(0 , 8);
+		local Btn = Instance.new('Frame');
 
-		local n = #cfgs;
-		local libs = {};
+		Btn.Name = NeverLose.RandomString();
+		Btn.Parent = Holder;
+		Btn.BackgroundColor3 = NeverLose.Theme.Field;
+		Btn.BorderSizePixel = 0;
+		Btn.Size = UDim2.new(1 , 0 , 1 , 0);
+		Btn.ZIndex = LayerIndex + 9;
 
-		for i , c in next , cfgs do
-			local isList = (type(c.Description) == 'string' and c.Description ~= '') or c.Style == 'List';
-			local h = isList and 46 or (c.Small and 28 or 34);
-			local lib = WBBuild(Holder , c , UDim2.new(1 / n , -(8 * (n - 1)) / n , 0 , h) , Z);
+		local BtnCorner = Instance.new('UICorner');
 
-			lib.Button.LayoutOrder = i;
-			lib.Root = Root;
-			libs[i] = lib;
+		BtnCorner.CornerRadius = UDim.new(0 , 8);
+		BtnCorner.Parent = Btn;
+
+		local BtnStroke = Instance.new('UIStroke');
+
+		BtnStroke.Color = NeverLose.Theme.Stroke;
+		BtnStroke.Thickness = 1;
+		BtnStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border;
+		BtnStroke.Parent = Btn;
+
+		local Content = Instance.new('Frame');
+
+		Content.Name = NeverLose.RandomString();
+		Content.Parent = Btn;
+		Content.BackgroundTransparency = 1;
+		Content.BorderSizePixel = 0;
+		Content.Size = UDim2.fromScale(1 , 1);
+		Content.ZIndex = LayerIndex + 10;
+
+		local ContentLayout = Instance.new('UIListLayout');
+
+		ContentLayout.Parent = Content;
+		ContentLayout.FillDirection = Enum.FillDirection.Horizontal;
+		ContentLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center;
+		ContentLayout.VerticalAlignment = Enum.VerticalAlignment.Center;
+		ContentLayout.SortOrder = Enum.SortOrder.LayoutOrder;
+		ContentLayout.Padding = UDim.new(0 , 8);
+
+		local Icon = Instance.new('TextLabel');
+
+		Icon.Name = NeverLose.RandomString();
+		Icon.Parent = Content;
+		Icon.BackgroundTransparency = 1;
+		Icon.BorderSizePixel = 0;
+		Icon.LayoutOrder = 1;
+		Icon.Size = UDim2.fromOffset(16 , 16);
+		Icon.TextSize = 16;
+		Icon.TextColor3 = NeverLose.Theme.Accent;
+		Icon.ZIndex = LayerIndex + 11;
+		Icon.Visible = Config.Icon ~= nil;
+
+		if Config.Icon then
+			NeverLose:SetIconMode(Icon , Config.Icon);
 		end;
 
-		Root.Visible = Signel:GetValue() and true or false;
+		local Label = Instance.new('TextLabel');
 
-		Signel:Connect(function(v)
-			Root.Visible = v and true or false;
-		end);
+		Label.Name = NeverLose.RandomString();
+		Label.Parent = Content;
+		Label.BackgroundTransparency = 1;
+		Label.BorderSizePixel = 0;
+		Label.LayoutOrder = 2;
+		Label.AutomaticSize = Enum.AutomaticSize.XY;
+		Label.Size = UDim2.fromOffset(0 , 0);
+		Label.Font = Enum.Font.GothamMedium;
+		Label.Text = Config.Name;
+		Label.TextColor3 = NeverLose.Theme.Text;
+		Label.TextSize = 13;
+		Label.ZIndex = LayerIndex + 11;
 
-		return libs;
-	end;
+		local Button = {};
 
-	function idx:AddWideButton(Config)
-		return WBRow({ Config or {} })[1];
-	end;
+		function Button:SetText(t)
+			Label.Text = t;
+		end;
 
-	function idx:AddWideButtonRow(List)
-		return WBRow(List);
+		function Button:SetIcon(t)
+			Icon.Visible = t ~= nil;
+
+			if t then
+				NeverLose:SetIconMode(Icon , t);
+			end;
+		end;
+
+		local bth = NeverLose:CreateInput(Holder , LPH_NO_VIRTUALIZE(function()
+			Config.Callback(Button);
+		end));
+
+		NeverLose:AddSignal(bth.MouseEnter:Connect(LPH_NO_VIRTUALIZE(function()
+			NeverLose.PlayAnimate(Btn , SlowyTween , {
+				BackgroundColor3 = NeverLose.Theme.Hover,
+			});
+		end)));
+
+		NeverLose:AddSignal(bth.MouseLeave:Connect(LPH_NO_VIRTUALIZE(function()
+			NeverLose.PlayAnimate(Btn , SlowyTween , {
+				BackgroundColor3 = NeverLose.Theme.Field,
+			});
+		end)));
+
+		return Button;
 	end;
 
 	function idx:AddDependencyBox()
