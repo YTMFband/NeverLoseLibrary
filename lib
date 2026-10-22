@@ -3020,7 +3020,8 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 			Blacklist = {},
 			Callback = EmptyFunction,      -- (keyName) когда сменили клавишу
 			StateCallback = EmptyFunction, -- (active) когда бинд включился/выключился
-			Mode = 'Hold',                 -- 'Hold' | 'Toggle' | 'Always'
+			Mode = 'Hold',                 -- 'Hold' | 'Toggle' | 'Always' | 'Once' (один раз за нажатие)
+			FlashTime = 0.25,              -- Once: сколько миллисекунд подсвечивается строка в списке
 			Name = nil,                    -- имя в keybind list (по умолчанию - название строки)
 			ShowInList = true,
 			MobileButton = false,          -- true: создать экранную кнопку для этого бинда
@@ -3031,7 +3032,7 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 			Flag = nil
 		});
 
-		local Modes = { Hold = true , Toggle = true , Always = true };
+		local Modes = { Hold = true , Toggle = true , Always = true , Once = true };
 
 		if not Modes[Config.Mode] then
 			Config.Mode = 'Hold';
@@ -3145,9 +3146,26 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 			return KeybindLib.Active;
 		end;
 
+		-- Once: один вызов StateCallback(true) за нажатие, без включено/выключено; строка в списке коротко мигает
+		local function fireOnce()
+			KeybindLib.Active = true;
+			fireChanged();
+			task.spawn(Config.StateCallback , true);
+
+			task.delay((Config.FlashTime or 0.25) , function()
+				KeybindLib.Active = false;
+				fireChanged();
+			end);
+		end;
+
 		-- то же, что нажатие / отпускание клавиши (используют экранные кнопки)
 		function KeybindLib:Press()
 			if KeybindLib.Mode == 'Always' then
+				return;
+			end;
+
+			if KeybindLib.Mode == 'Once' then
+				fireOnce();
 				return;
 			end;
 
@@ -3261,6 +3279,11 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 				return;
 			end;
 
+			if KeybindLib.Mode == 'Once' then
+				fireOnce();
+				return;
+			end;
+
 			if KeybindLib.Mode == 'Toggle' then
 				setActive(not KeybindLib.Active);
 			else
@@ -3314,7 +3337,7 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 			end;
 
 			local Width , Row = 96 , 22;
-			local Items = Config.AllowModeChange and { 'Hold' , 'Toggle' , 'Always' , 'Reset' } or { 'Reset' };
+			local Items = Config.AllowModeChange and { 'Hold' , 'Toggle' , 'Always' , 'Once' , 'Reset' } or { 'Reset' };
 			local Buttons = {};
 
 			Menu = Instance.new('Frame');
@@ -3409,7 +3432,7 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 			Divider.BackgroundColor3 = NeverLose.Theme.Stroke;
 			Divider.BackgroundTransparency = 0.4;
 			Divider.BorderSizePixel = 0;
-			Divider.Position = UDim2.new(0 , 8 , 0 , 5 + 3 * Row - 1);
+			Divider.Position = UDim2.new(0 , 8 , 0 , 5 + (#Items - 1) * Row - 1);
 			Divider.Size = UDim2.new(1 , -16 , 0 , 1);
 			Divider.ZIndex = 171;
 			Divider.Visible = Config.AllowModeChange and true or false;
@@ -10501,7 +10524,7 @@ function NeverLose:CreateKeybindList(Config)
 
 		entry.NameLabel.Text = name or 'Keybind';
 		entry.KeyLabel.Text = string.format('[%s] %s' , keyText(key) , mode);
-		entry.Row.Visible = hasKey and (active or Config.ShowInactive);
+		entry.Row.Visible = hasKey and (active or Config.ShowInactive or mode == 'Once');
 
 		NeverLose.PlayAnimate(entry.NameLabel , SlowyTween , {
 			TextTransparency = active and 0.1 or 0.6,
