@@ -11874,13 +11874,17 @@ end;
 -- Отдельное окно, не привязано к меню (как Keybind list). Цель выбирается функцией:
 --   local Card = NeverLose:CreateTargetCard({ Name = 'Target' })
 --   Card:SetTarget(player)   -- выбрать цель; nil - сбросить
+-- Броня читается из character.BodyEffects.Armor (значение). Нет папки или значения - 0 / 200.
 function NeverLose:CreateTargetCard(Config)
 	Config = NeverLose:ProcessParams(Config , {
 		Name = 'Target',
 		Position = UDim2.new(1 , -314 , 0.4 , 0), -- по умолчанию правый край экрана
 		Width = 290,
 		Visible = true,
-		Callback = EmptyFunction, -- (player или nil) при смене цели
+		ArmorMax = 200,              -- максимум брони (полоса и подпись)
+		BodyFolder = 'BodyEffects',  -- папка в персонаже
+		ArmorName = 'Armor',         -- значение брони внутри папки
+		Callback = EmptyFunction,    -- (player или nil) при смене цели
 	});
 
 	local Card = {};
@@ -11889,10 +11893,17 @@ function NeverLose:CreateTargetCard(Config)
 	local LastRatio = 1;
 	local TargetConns = {};
 	local HumConns = {};
+	local ArmorConns = {};
+	local ArmorVal = 0;
+	local ArmorMax = math.max(Config.ArmorMax , 1);
 	local Thumbs = {};
 	local LocalPlayer = Players.LocalPlayer;
 	local RED = Color3.fromRGB(255 , 92 , 92);
+	local GREEN = Color3.fromRGB(52 , 211 , 153);
 	local WHITE = Color3.fromRGB(255 , 255 , 255);
+
+	-- функции, которые вызываются раньше своего определения
+	local setArmor , bindArmor;
 
 	-- цвет роли из активной темы (если роли нет, берём запасной)
 	local function role(name , fallback)
@@ -11937,7 +11948,7 @@ function NeverLose:CreateTargetCard(Config)
 		BackgroundTransparency = 0.12,
 		ClipsDescendants = true,
 		Position = Config.Position,
-		Size = UDim2.fromOffset(Config.Width , 116),
+		Size = UDim2.fromOffset(Config.Width , 136),
 		Visible = Config.Visible and true or false,
 		ZIndex = 15,
 	} , NeverLose.ScreenGui);
@@ -11993,7 +12004,7 @@ function NeverLose:CreateTargetCard(Config)
 	local Info = make('Frame' , {
 		BackgroundTransparency = 1,
 		Position = UDim2.fromOffset(73 , 40),
-		Size = UDim2.new(1 , -84 , 0 , 70),
+		Size = UDim2.new(1 , -84 , 0 , 90),
 		ZIndex = 16,
 	} , Root);
 
@@ -12032,7 +12043,7 @@ function NeverLose:CreateTargetCard(Config)
 		LayoutOrder = 1,
 		Size = UDim2.fromOffset(0 , 0),
 		Text = '-',
-		TextColor3 = role('Text' , WHITE),
+		TextColor3 = GREEN,
 		TextSize = 22,
 		ZIndex = 18,
 	} , HpRow);
@@ -12050,13 +12061,56 @@ function NeverLose:CreateTargetCard(Config)
 		ZIndex = 18,
 	} , HpRow);
 
+	-- броня: подпись, значение и тонкая полоса
+	local ArmorLabel = make('TextLabel' , {
+		BackgroundTransparency = 1,
+		Position = UDim2.fromOffset(0 , 42),
+		Size = UDim2.new(0.5 , 0 , 0 , 12),
+		Font = Enum.Font.GothamMedium,
+		Text = 'Armor',
+		TextColor3 = role('TextDim' , WHITE),
+		TextSize = 10,
+		TextTransparency = 0.2,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		ZIndex = 17,
+	} , Info);
+
+	local ArmorValue = make('TextLabel' , {
+		BackgroundTransparency = 1,
+		Position = UDim2.new(0.5 , 0 , 0 , 42),
+		Size = UDim2.new(0.5 , 0 , 0 , 12),
+		Font = Enum.Font.GothamMedium,
+		Text = '0 / ' .. tostring(ArmorMax),
+		TextColor3 = role('Accent' , WHITE),
+		TextSize = 10,
+		TextXAlignment = Enum.TextXAlignment.Right,
+		ZIndex = 17,
+	} , Info);
+
+	local ArTrack = make('Frame' , {
+		BackgroundColor3 = role('Track' , Color3.fromRGB(30 , 29 , 36)),
+		BackgroundTransparency = 0.1,
+		ClipsDescendants = true,
+		Position = UDim2.fromOffset(0 , 57),
+		Size = UDim2.new(1 , 0 , 0 , 3),
+		ZIndex = 17,
+	} , Info);
+
+	make('UICorner' , { CornerRadius = UDim.new(0 , 2) } , ArTrack);
+
+	local ArFill = make('Frame' , {
+		BackgroundColor3 = role('Accent' , Color3.fromRGB(78 , 127 , 252)),
+		Size = UDim2.fromScale(0 , 1),
+		ZIndex = 18,
+	} , ArTrack);
+
 	-- полоса здоровья с «шлейфом» урона
 	local Track = make('Frame' , {
 		BackgroundColor3 = role('Track' , Color3.fromRGB(30 , 29 , 36)),
 		BackgroundTransparency = 0.1,
 		ClipsDescendants = true,
-		Position = UDim2.fromOffset(0 , 46),
-		Size = UDim2.new(1 , 0 , 0 , 6),
+		Position = UDim2.fromOffset(0 , 65),
+		Size = UDim2.new(1 , 0 , 0 , 7),
 		ZIndex = 17,
 	} , Info);
 
@@ -12070,7 +12124,7 @@ function NeverLose:CreateTargetCard(Config)
 	} , Track);
 
 	local Fill = make('Frame' , {
-		BackgroundColor3 = WHITE,
+		BackgroundColor3 = GREEN,
 		Size = UDim2.fromScale(0 , 1),
 		ZIndex = 19,
 	} , Track);
@@ -12078,7 +12132,7 @@ function NeverLose:CreateTargetCard(Config)
 	-- команда и дистанция
 	local MetaRow = make('Frame' , {
 		BackgroundTransparency = 1,
-		Position = UDim2.fromOffset(0 , 58),
+		Position = UDim2.fromOffset(0 , 78),
 		Size = UDim2.new(1 , 0 , 0 , 12),
 		ZIndex = 17,
 	} , Info);
@@ -12114,6 +12168,10 @@ function NeverLose:CreateTargetCard(Config)
 		AvatarStroke.Color = RootStroke.Color;
 		Avatar.BackgroundColor3 = role('Deep' , Color3.fromRGB(10 , 13 , 21));
 		Track.BackgroundColor3 = role('Track' , Color3.fromRGB(30 , 29 , 36));
+		ArTrack.BackgroundColor3 = role('Track' , Color3.fromRGB(30 , 29 , 36));
+		ArFill.BackgroundColor3 = role('Accent' , Color3.fromRGB(78 , 127 , 252));
+		ArmorValue.TextColor3 = role('Accent' , WHITE);
+		ArmorLabel.TextColor3 = role('TextDim' , WHITE);
 		Title.TextColor3 = role('Text' , WHITE);
 		NameLabel.TextColor3 = role('Text' , WHITE);
 		HpMax.TextColor3 = role('Text' , WHITE);
@@ -12121,9 +12179,9 @@ function NeverLose:CreateTargetCard(Config)
 		DistLabel.TextColor3 = role('Accent' , WHITE);
 	end;
 
-	-- при 30% и ниже здоровье краснеет
+	-- здоровье зелёное, при 30% и ниже красное
 	local function colorHealth()
-		local c = (LastRatio <= 0.3) and RED or role('Text' , WHITE);
+		local c = (LastRatio <= 0.3) and RED or GREEN;
 
 		Fill.BackgroundColor3 = c;
 		HpNum.TextColor3 = c;
@@ -12155,6 +12213,74 @@ function NeverLose:CreateTargetCard(Config)
 		end;
 	end;
 
+	-- ===== броня =====
+	-- значение брони из character.BodyEffects.Armor; нет папки или значения - 0
+	setArmor = function(v)
+		local n = tonumber(v) or 0;
+
+		ArmorVal = math.clamp(math.floor(n + 0.5) , 0 , ArmorMax);
+		ArmorValue.Text = tostring(ArmorVal) .. ' / ' .. tostring(ArmorMax);
+
+		TweenService:Create(ArFill , TweenInfo.new(0.2) , { Size = UDim2.fromScale(ArmorVal / ArmorMax , 1) }):Play();
+	end;
+
+	local function clearArmorConns()
+		for _ , c in next , ArmorConns do
+			c:Disconnect();
+		end;
+
+		table.clear(ArmorConns);
+	end;
+
+	bindArmor = function(char)
+		clearArmorConns();
+
+		if not char then
+			setArmor(0);
+			return;
+		end;
+
+		local body = char:FindFirstChild(Config.BodyFolder);
+		local obj = body and body:FindFirstChild(Config.ArmorName);
+
+		if obj and obj:IsA('ValueBase') then
+			setArmor(obj.Value);
+
+			table.insert(ArmorConns , NeverLose:AddSignal(obj.Changed:Connect(function(v)
+				setArmor(v);
+			end)));
+		else
+			setArmor(0);
+		end;
+
+		-- появилась или пропала папка / значение: перепривязываемся
+		table.insert(ArmorConns , NeverLose:AddSignal(char.ChildAdded:Connect(function(c)
+			if c.Name == Config.BodyFolder then
+				bindArmor(char);
+			end;
+		end)));
+
+		table.insert(ArmorConns , NeverLose:AddSignal(char.ChildRemoved:Connect(function(c)
+			if c.Name == Config.BodyFolder then
+				bindArmor(char);
+			end;
+		end)));
+
+		if body then
+			table.insert(ArmorConns , NeverLose:AddSignal(body.ChildAdded:Connect(function(c)
+				if c.Name == Config.ArmorName then
+					bindArmor(char);
+				end;
+			end)));
+
+			table.insert(ArmorConns , NeverLose:AddSignal(body.ChildRemoved:Connect(function(c)
+				if c.Name == Config.ArmorName then
+					bindArmor(char);
+				end;
+			end)));
+		end;
+	end;
+
 	local function showEmpty()
 		NameLabel.Text = 'No target';
 		HpNum.Text = '-';
@@ -12165,6 +12291,7 @@ function NeverLose:CreateTargetCard(Config)
 		LastRatio = 1;
 		Fill.Size = UDim2.fromScale(0 , 1);
 		Ghost.Size = UDim2.fromScale(0 , 1);
+		setArmor(0);
 		colorHealth();
 	end;
 
@@ -12238,13 +12365,15 @@ function NeverLose:CreateTargetCard(Config)
 		end;
 	end;
 
-	-- после возрождения цели ждём её Humanoid и подключаемся заново
+	-- после возрождения цели подключаемся заново (здоровье и броня)
 	local function onCharacter(char)
 		if not Target then
 			return;
 		end;
 
 		local my = Token;
+
+		bindArmor(char);
 
 		task.spawn(function()
 			local hum = char:WaitForChild('Humanoid' , 5);
@@ -12271,6 +12400,7 @@ function NeverLose:CreateTargetCard(Config)
 
 		table.clear(TargetConns);
 		clearHumConns();
+		clearArmorConns();
 
 		Target = player;
 		Token += 1;
@@ -12299,6 +12429,7 @@ function NeverLose:CreateTargetCard(Config)
 		if Target.Character then
 			onCharacter(Target.Character);
 		else
+			bindArmor(nil);
 			bindHumanoid();
 		end;
 
@@ -12345,6 +12476,7 @@ function NeverLose:CreateTargetCard(Config)
 
 		table.clear(TargetConns);
 		clearHumConns();
+		clearArmorConns();
 		Root:Destroy();
 	end;
 
