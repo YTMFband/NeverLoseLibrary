@@ -11870,6 +11870,509 @@ do
 	};
 end;
 
+-- ===================== КАРТОЧКА ЦЕЛИ =====================
+-- Отдельное окно, не привязано к меню (как Keybind list). Цель выбирается функцией:
+--   local Card = NeverLose:CreateTargetCard({ Name = 'Target' })
+--   Card:SetTarget(player)   -- выбрать цель; nil - сбросить
+function NeverLose:CreateTargetCard(Config)
+	Config = NeverLose:ProcessParams(Config , {
+		Name = 'Target',
+		Position = UDim2.new(1 , -314 , 0.4 , 0), -- по умолчанию правый край экрана
+		Width = 290,
+		Visible = true,
+		Callback = EmptyFunction, -- (player или nil) при смене цели
+	});
+
+	local Card = {};
+	local Target = nil;
+	local Token = 0;
+	local LastRatio = 1;
+	local TargetConns = {};
+	local HumConns = {};
+	local Thumbs = {};
+	local LocalPlayer = Players.LocalPlayer;
+	local RED = Color3.fromRGB(255 , 92 , 92);
+	local WHITE = Color3.fromRGB(255 , 255 , 255);
+
+	-- цвет роли из активной темы (если роли нет, берём запасной)
+	local function role(name , fallback)
+		local t = NeverLose.Theme;
+
+		return (t and t[name]) or fallback;
+	end;
+
+	local function make(class , props , parent)
+		local o = Instance.new(class);
+
+		o.Name = NeverLose.RandomString();
+
+		if o:IsA('GuiObject') then
+			o.BorderSizePixel = 0;
+		end;
+
+		for k , v in next , props do
+			o[k] = v;
+		end;
+
+		o.Parent = parent;
+
+		return o;
+	end;
+
+	local function italic(weight)
+		local ok , f = pcall(function()
+			return Font.new('rbxasset://fonts/families/Montserrat.json' , weight , Enum.FontStyle.Italic);
+		end);
+
+		if ok and f then
+			return f;
+		end;
+
+		return Font.new('rbxasset://fonts/families/GothamSSm.json' , weight);
+	end;
+
+	-- ===== окно =====
+	local Root = make('Frame' , {
+		BackgroundColor3 = role('Card' , Color3.fromRGB(20 , 22 , 27)),
+		BackgroundTransparency = 0.12,
+		ClipsDescendants = true,
+		Position = Config.Position,
+		Size = UDim2.fromOffset(Config.Width , 116),
+		Visible = Config.Visible and true or false,
+		ZIndex = 15,
+	} , NeverLose.ScreenGui);
+
+	make('UICorner' , { CornerRadius = UDim.new(0 , 10) } , Root);
+
+	local RootStroke = make('UIStroke' , {
+		Color = role('Stroke' , Color3.fromRGB(45 , 48 , 58)),
+		Transparency = 0.1,
+	} , Root);
+
+	-- шапка: полоса как у секций, за неё карточку можно двигать
+	local Header = make('Frame' , {
+		BackgroundColor3 = WHITE,
+		BackgroundTransparency = 0.955,
+		Size = UDim2.new(1 , 0 , 0 , 30),
+		ZIndex = 16,
+	} , Root);
+
+	local Title = make('TextLabel' , {
+		BackgroundTransparency = 1,
+		Position = UDim2.fromOffset(11 , 0),
+		Size = UDim2.new(1 , -22 , 1 , 0),
+		Font = Enum.Font.GothamMedium,
+		Text = Config.Name,
+		TextColor3 = role('Text' , WHITE),
+		TextSize = 12,
+		TextTransparency = 0.1,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		ZIndex = 17,
+	} , Header);
+
+	NeverLose.Drag(Header , Root , 0.05);
+
+	-- аватар
+	local Avatar = make('ImageLabel' , {
+		BackgroundColor3 = role('Deep' , Color3.fromRGB(10 , 13 , 21)),
+		Image = '',
+		Position = UDim2.fromOffset(11 , 40),
+		ScaleType = Enum.ScaleType.Crop,
+		Size = UDim2.fromOffset(52 , 52),
+		ZIndex = 16,
+	} , Root);
+
+	make('UICorner' , { CornerRadius = UDim.new(0 , 10) } , Avatar);
+
+	local AvatarStroke = make('UIStroke' , {
+		Color = role('Stroke' , Color3.fromRGB(45 , 48 , 58)),
+		Transparency = 0.2,
+	} , Avatar);
+
+	-- правая колонка
+	local Info = make('Frame' , {
+		BackgroundTransparency = 1,
+		Position = UDim2.fromOffset(73 , 40),
+		Size = UDim2.new(1 , -84 , 0 , 70),
+		ZIndex = 16,
+	} , Root);
+
+	local NameLabel = make('TextLabel' , {
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1 , 0 , 0 , 16),
+		Font = Enum.Font.GothamMedium,
+		Text = 'No target',
+		TextColor3 = role('Text' , WHITE),
+		TextSize = 13,
+		TextTransparency = 0.1,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		ZIndex = 17,
+	} , Info);
+
+	-- здоровье: курсивное число и максимум
+	local HpRow = make('Frame' , {
+		BackgroundTransparency = 1,
+		Position = UDim2.fromOffset(0 , 18),
+		Size = UDim2.new(1 , 0 , 0 , 22),
+		ZIndex = 17,
+	} , Info);
+
+	make('UIListLayout' , {
+		FillDirection = Enum.FillDirection.Horizontal,
+		VerticalAlignment = Enum.VerticalAlignment.Bottom,
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Padding = UDim.new(0 , 3),
+	} , HpRow);
+
+	local HpNum = make('TextLabel' , {
+		AutomaticSize = Enum.AutomaticSize.XY,
+		BackgroundTransparency = 1,
+		FontFace = italic(Enum.FontWeight.ExtraBold),
+		LayoutOrder = 1,
+		Size = UDim2.fromOffset(0 , 0),
+		Text = '-',
+		TextColor3 = role('Text' , WHITE),
+		TextSize = 22,
+		ZIndex = 18,
+	} , HpRow);
+
+	local HpMax = make('TextLabel' , {
+		AutomaticSize = Enum.AutomaticSize.XY,
+		BackgroundTransparency = 1,
+		FontFace = italic(Enum.FontWeight.Bold),
+		LayoutOrder = 2,
+		Size = UDim2.fromOffset(0 , 0),
+		Text = '',
+		TextColor3 = role('Text' , WHITE),
+		TextSize = 13,
+		TextTransparency = 0.35,
+		ZIndex = 18,
+	} , HpRow);
+
+	-- полоса здоровья с «шлейфом» урона
+	local Track = make('Frame' , {
+		BackgroundColor3 = role('Track' , Color3.fromRGB(30 , 29 , 36)),
+		BackgroundTransparency = 0.1,
+		ClipsDescendants = true,
+		Position = UDim2.fromOffset(0 , 46),
+		Size = UDim2.new(1 , 0 , 0 , 6),
+		ZIndex = 17,
+	} , Info);
+
+	make('UICorner' , { CornerRadius = UDim.new(0 , 4) } , Track);
+
+	local Ghost = make('Frame' , {
+		BackgroundColor3 = WHITE,
+		BackgroundTransparency = 0.45,
+		Size = UDim2.fromScale(0 , 1),
+		ZIndex = 18,
+	} , Track);
+
+	local Fill = make('Frame' , {
+		BackgroundColor3 = WHITE,
+		Size = UDim2.fromScale(0 , 1),
+		ZIndex = 19,
+	} , Track);
+
+	-- команда и дистанция
+	local MetaRow = make('Frame' , {
+		BackgroundTransparency = 1,
+		Position = UDim2.fromOffset(0 , 58),
+		Size = UDim2.new(1 , 0 , 0 , 12),
+		ZIndex = 17,
+	} , Info);
+
+	local TeamLabel = make('TextLabel' , {
+		BackgroundTransparency = 1,
+		Size = UDim2.new(0.6 , 0 , 1 , 0),
+		Font = Enum.Font.GothamMedium,
+		Text = 'Team: -',
+		TextColor3 = role('TextDim' , WHITE),
+		TextSize = 11,
+		TextTransparency = 0.2,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		ZIndex = 18,
+	} , MetaRow);
+
+	local DistLabel = make('TextLabel' , {
+		BackgroundTransparency = 1,
+		Size = UDim2.new(0.4 , 0 , 1 , 0),
+		Position = UDim2.new(0.6 , 0 , 0 , 0),
+		Font = Enum.Font.GothamMedium,
+		Text = '-',
+		TextColor3 = role('Accent' , WHITE),
+		TextSize = 11,
+		TextXAlignment = Enum.TextXAlignment.Right,
+		ZIndex = 18,
+	} , MetaRow);
+
+	-- ===== оформление =====
+	local function paint()
+		Root.BackgroundColor3 = role('Card' , Color3.fromRGB(20 , 22 , 27));
+		RootStroke.Color = role('Stroke' , Color3.fromRGB(45 , 48 , 58));
+		AvatarStroke.Color = RootStroke.Color;
+		Avatar.BackgroundColor3 = role('Deep' , Color3.fromRGB(10 , 13 , 21));
+		Track.BackgroundColor3 = role('Track' , Color3.fromRGB(30 , 29 , 36));
+		Title.TextColor3 = role('Text' , WHITE);
+		NameLabel.TextColor3 = role('Text' , WHITE);
+		HpMax.TextColor3 = role('Text' , WHITE);
+		TeamLabel.TextColor3 = role('TextDim' , WHITE);
+		DistLabel.TextColor3 = role('Accent' , WHITE);
+	end;
+
+	-- при 30% и ниже здоровье краснеет
+	local function colorHealth()
+		local c = (LastRatio <= 0.3) and RED or role('Text' , WHITE);
+
+		Fill.BackgroundColor3 = c;
+		HpNum.TextColor3 = c;
+	end;
+
+	local function setHealth(hum)
+		local max = math.max(hum.MaxHealth , 1);
+		local hp = math.clamp(hum.Health , 0 , max);
+		local ratio = hp / max;
+		local dropped = ratio < LastRatio;
+
+		HpNum.Text = tostring(math.ceil(hp));
+		HpMax.Text = '/ ' .. tostring(math.floor(max));
+		LastRatio = ratio;
+		colorHealth();
+
+		TweenService:Create(Fill , TweenInfo.new(0.12) , { Size = UDim2.fromScale(ratio , 1) }):Play();
+
+		if dropped then
+			local my = Token;
+
+			task.delay(0.35 , function()
+				if my == Token then
+					TweenService:Create(Ghost , TweenInfo.new(0.4) , { Size = UDim2.fromScale(ratio , 1) }):Play();
+				end;
+			end);
+		else
+			Ghost.Size = UDim2.fromScale(ratio , 1);
+		end;
+	end;
+
+	local function showEmpty()
+		NameLabel.Text = 'No target';
+		HpNum.Text = '-';
+		HpMax.Text = '';
+		TeamLabel.Text = 'Team: -';
+		DistLabel.Text = '-';
+		Avatar.Image = '';
+		LastRatio = 1;
+		Fill.Size = UDim2.fromScale(0 , 1);
+		Ghost.Size = UDim2.fromScale(0 , 1);
+		colorHealth();
+	end;
+
+	local function distanceTo(player)
+		local mine = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild('HumanoidRootPart');
+		local theirs = player.Character and player.Character:FindFirstChild('HumanoidRootPart');
+
+		if mine and theirs then
+			return (mine.Position - theirs.Position).Magnitude;
+		end;
+
+		return nil;
+	end;
+
+	local function setAvatar(player)
+		local img = Thumbs[player.UserId];
+
+		if img then
+			Avatar.Image = img;
+			return;
+		end;
+
+		Avatar.Image = '';
+
+		task.spawn(function()
+			local ok , image = pcall(Players.GetUserThumbnailAsync , Players , player.UserId , Enum.ThumbnailType.HeadShot , Enum.ThumbnailSize.Size150x150);
+
+			if ok and image then
+				Thumbs[player.UserId] = image;
+
+				if Target == player then
+					Avatar.Image = image;
+				end;
+			end;
+		end);
+	end;
+
+	local function clearHumConns()
+		for _ , c in next , HumConns do
+			c:Disconnect();
+		end;
+
+		table.clear(HumConns);
+	end;
+
+	local function bindHumanoid()
+		clearHumConns();
+
+		if not Target then
+			return;
+		end;
+
+		local hum = Target.Character and Target.Character:FindFirstChildOfClass('Humanoid');
+
+		if hum then
+			LastRatio = hum.Health / math.max(hum.MaxHealth , 1);
+			setHealth(hum);
+
+			table.insert(HumConns , NeverLose:AddSignal(hum.HealthChanged:Connect(function()
+				setHealth(hum);
+			end)));
+
+			table.insert(HumConns , NeverLose:AddSignal(hum:GetPropertyChangedSignal('MaxHealth'):Connect(function()
+				setHealth(hum);
+			end)));
+		else
+			HpNum.Text = '-';
+			HpMax.Text = '';
+			Fill.Size = UDim2.fromScale(0 , 1);
+			Ghost.Size = UDim2.fromScale(0 , 1);
+		end;
+	end;
+
+	-- после возрождения цели ждём её Humanoid и подключаемся заново
+	local function onCharacter(char)
+		if not Target then
+			return;
+		end;
+
+		local my = Token;
+
+		task.spawn(function()
+			local hum = char:WaitForChild('Humanoid' , 5);
+
+			if my == Token and hum then
+				bindHumanoid();
+			end;
+		end);
+	end;
+
+	-- ===== API =====
+	function Card:SetTarget(player)
+		if typeof(player) ~= 'Instance' or not player:IsA('Player') or player == LocalPlayer then
+			player = nil;
+		end;
+
+		if player == Target then
+			return;
+		end;
+
+		for _ , c in next , TargetConns do
+			c:Disconnect();
+		end;
+
+		table.clear(TargetConns);
+		clearHumConns();
+
+		Target = player;
+		Token += 1;
+
+		local my = Token;
+
+		if not Target then
+			showEmpty();
+			task.spawn(Config.Callback , nil);
+			return;
+		end;
+
+		NameLabel.Text = Target.DisplayName;
+		TeamLabel.Text = 'Team: ' .. ((Target.Team and Target.Team.Name) or 'None');
+		DistLabel.Text = '-';
+		setAvatar(Target);
+
+		table.insert(TargetConns , Target.CharacterAdded:Connect(onCharacter));
+
+		table.insert(TargetConns , Target:GetPropertyChangedSignal('Team'):Connect(function()
+			if Target then
+				TeamLabel.Text = 'Team: ' .. ((Target.Team and Target.Team.Name) or 'None');
+			end;
+		end));
+
+		if Target.Character then
+			onCharacter(Target.Character);
+		else
+			bindHumanoid();
+		end;
+
+		-- дистанция обновляется 5 раз в секунду, пока цель выбрана
+		task.spawn(function()
+			while my == Token and Target do
+				local d = distanceTo(Target);
+
+				DistLabel.Text = d and string.format('%.1f m' , d) or '-';
+				task.wait(0.2);
+			end;
+		end);
+
+		task.spawn(Config.Callback , Target);
+	end;
+
+	function Card:ClearTarget()
+		Card:SetTarget(nil);
+	end;
+
+	function Card:GetTarget()
+		return Target;
+	end;
+
+	function Card:SetName(n)
+		Title.Text = n;
+	end;
+
+	function Card:SetVisible(v)
+		Root.Visible = v and true or false;
+	end;
+
+	function Card:Toggle()
+		Root.Visible = not Root.Visible;
+	end;
+
+	function Card:Destroy()
+		Token += 1;
+		Target = nil;
+
+		for _ , c in next , TargetConns do
+			c:Disconnect();
+		end;
+
+		table.clear(TargetConns);
+		clearHumConns();
+		Root:Destroy();
+	end;
+
+	Card.Root = Root;
+
+	paint();
+	showEmpty();
+
+	-- смена темы перекрашивает карточку; после Destroy слушатель сам удаляется
+	table.insert(NeverLose.ThemeListeners , function()
+		if not Root.Parent then
+			return false;
+		end;
+
+		paint();
+		colorHealth();
+	end);
+
+	-- если выбранный игрок вышел, карточка сбрасывается
+	NeverLose:AddSignal(Players.PlayerRemoving:Connect(function(p)
+		if p == Target then
+			Card:SetTarget(nil);
+		end;
+	end));
+
+	return Card;
+end;
+
 function NeverLose:Unload()
 	if not NeverLose.UnloadEnabled then
 		return;	
