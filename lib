@@ -12112,8 +12112,8 @@ function NeverLose:CreateTargetCard(Config)
 	} , Info);
 
 	local ArTrack = make('Frame' , {
-		BackgroundColor3 = role('Track' , Color3.fromRGB(30 , 29 , 36)),
-		BackgroundTransparency = 0.1,
+		BackgroundColor3 = WHITE,
+		BackgroundTransparency = 0.85,
 		ClipsDescendants = true,
 		Position = UDim2.fromOffset(0 , 57),
 		Size = UDim2.new(1 , 0 , 0 , 3),
@@ -12130,11 +12130,11 @@ function NeverLose:CreateTargetCard(Config)
 
 	-- полоса здоровья с «шлейфом» урона
 	local Track = make('Frame' , {
-		BackgroundColor3 = role('Track' , Color3.fromRGB(30 , 29 , 36)),
-		BackgroundTransparency = 0.1,
+		BackgroundColor3 = WHITE,
+		BackgroundTransparency = 0.85,
 		ClipsDescendants = true,
 		Position = UDim2.fromOffset(0 , 65),
-		Size = UDim2.new(1 , 0 , 0 , 7),
+		Size = UDim2.new(1 , 0 , 0 , 9),
 		ZIndex = 17,
 	} , Info);
 
@@ -12148,10 +12148,24 @@ function NeverLose:CreateTargetCard(Config)
 	} , Track);
 
 	local Fill = make('Frame' , {
-		BackgroundColor3 = GREEN,
+		BackgroundColor3 = WHITE,
 		Size = UDim2.fromScale(0 , 1),
 		ZIndex = 19,
 	} , Track);
+
+	local FillGrad = make('UIGradient' , {
+		Color = ColorSequence.new(Color3.fromRGB(34 , 196 , 136) , GREEN),
+	} , Fill);
+
+	for _ , p in next , { 0.25 , 0.5 , 0.75 } do
+		make('Frame' , {
+			BackgroundColor3 = Color3.fromRGB(10 , 12 , 18),
+			BackgroundTransparency = 0.55,
+			Position = UDim2.fromScale(p , 0),
+			Size = UDim2.new(0 , 1 , 1 , 0),
+			ZIndex = 20,
+		} , Track);
+	end;
 
 	-- команда и дистанция
 	local MetaRow = make('Frame' , {
@@ -12278,8 +12292,8 @@ function NeverLose:CreateTargetCard(Config)
 		RootStroke.Color = role('Stroke' , Color3.fromRGB(45 , 48 , 58));
 		AvatarStroke.Color = RootStroke.Color;
 		Avatar.BackgroundColor3 = role('Deep' , Color3.fromRGB(10 , 13 , 21));
-		Track.BackgroundColor3 = role('Track' , Color3.fromRGB(30 , 29 , 36));
-		ArTrack.BackgroundColor3 = role('Track' , Color3.fromRGB(30 , 29 , 36));
+		Track.BackgroundColor3 = WHITE;
+		ArTrack.BackgroundColor3 = WHITE;
 		ArFill.BackgroundColor3 = role('Accent' , Color3.fromRGB(78 , 127 , 252));
 		ArmorValue.TextColor3 = role('Accent' , WHITE);
 		ArmorLabel.TextColor3 = role('TextDim' , WHITE);
@@ -12292,9 +12306,11 @@ function NeverLose:CreateTargetCard(Config)
 
 	-- здоровье зелёное, при 30% и ниже красное
 	local function colorHealth()
-		local c = (LastRatio <= 0.3) and RED or GREEN;
+		local low = LastRatio <= 0.3;
+		local c = low and RED or GREEN;
+		local c2 = low and Color3.fromRGB(224 , 69 , 69) or Color3.fromRGB(34 , 196 , 136);
 
-		Fill.BackgroundColor3 = c;
+		FillGrad.Color = ColorSequence.new(c2 , c);
 		HpNum.TextColor3 = c;
 	end;
 
