@@ -3337,7 +3337,7 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 			end;
 
 			local Width , Row = 96 , 22;
-			local Items = Config.AllowModeChange and { 'Hold' , 'Toggle' , 'Always' , 'Once' , 'Reset' } or { 'Reset' };
+			local Items = Config.AllowModeChange and { 'Hold' , 'Toggle' , 'Always' , 'Reset' } or { 'Reset' };
 			local Buttons = {};
 
 			Menu = Instance.new('Frame');
@@ -3432,7 +3432,7 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 			Divider.BackgroundColor3 = NeverLose.Theme.Stroke;
 			Divider.BackgroundTransparency = 0.4;
 			Divider.BorderSizePixel = 0;
-			Divider.Position = UDim2.new(0 , 8 , 0 , 5 + (#Items - 1) * Row - 1);
+			Divider.Position = UDim2.new(0 , 8 , 0 , 5 + 3 * Row - 1);
 			Divider.Size = UDim2.new(1 , -16 , 0 , 1);
 			Divider.ZIndex = 171;
 			Divider.Visible = Config.AllowModeChange and true or false;
@@ -10524,7 +10524,7 @@ function NeverLose:CreateKeybindList(Config)
 
 		entry.NameLabel.Text = name or 'Keybind';
 		entry.KeyLabel.Text = string.format('[%s] %s' , keyText(key) , mode);
-		entry.Row.Visible = hasKey and (active or Config.ShowInactive or mode == 'Once');
+		entry.Row.Visible = (mode == 'Once') or (hasKey and (active or Config.ShowInactive));
 
 		NeverLose.PlayAnimate(entry.NameLabel , SlowyTween , {
 			TextTransparency = active and 0.1 or 0.6,
@@ -11927,6 +11927,7 @@ function NeverLose:CreateTargetCard(Config)
 
 	-- функции, которые вызываются раньше своего определения
 	local setArmor , bindArmor;
+	local setWeapon , bindWeapon;
 
 	-- цвет роли из активной темы (если роли нет, берём запасной)
 	local function role(name , fallback)
@@ -11971,7 +11972,7 @@ function NeverLose:CreateTargetCard(Config)
 		BackgroundTransparency = 0.12,
 		ClipsDescendants = true,
 		Position = Config.Position,
-		Size = UDim2.fromOffset(Config.Width , 136),
+		Size = UDim2.fromOffset(Config.Width , 182),
 		Visible = Config.Visible and true or false,
 		ZIndex = 15,
 	} , NeverLose.ScreenGui);
@@ -12164,7 +12165,8 @@ function NeverLose:CreateTargetCard(Config)
 		BackgroundTransparency = 1,
 		Size = UDim2.new(0.6 , 0 , 1 , 0),
 		Font = Enum.Font.GothamMedium,
-		Text = 'Team: -',
+		Text = 'No crew',
+		TextTruncate = Enum.TextTruncate.AtEnd,
 		TextColor3 = role('TextDim' , WHITE),
 		TextSize = 11,
 		TextTransparency = 0.2,
@@ -12183,6 +12185,92 @@ function NeverLose:CreateTargetCard(Config)
 		TextXAlignment = Enum.TextXAlignment.Right,
 		ZIndex = 18,
 	} , MetaRow);
+
+	-- ===== оружие: Tool в руках цели, значения Ammo и MaxAmmo =====
+	local WeaponFrame = make('Frame' , {
+		BackgroundColor3 = role('Track' , Color3.fromRGB(30 , 29 , 36)),
+		BackgroundTransparency = 0.15,
+		ClipsDescendants = true,
+		Position = UDim2.fromOffset(11 , 138),
+		Size = UDim2.new(1 , -22 , 0 , 38),
+		ZIndex = 16,
+	} , Root);
+
+	make('UICorner' , { CornerRadius = UDim.new(0 , 8) } , WeaponFrame);
+
+	local WeaponStroke = make('UIStroke' , {
+		Color = role('Stroke' , Color3.fromRGB(45 , 48 , 58)),
+		Transparency = 0.4,
+	} , WeaponFrame);
+
+	local WeaponName = make('TextLabel' , {
+		BackgroundTransparency = 1,
+		Position = UDim2.fromOffset(10 , 5),
+		Size = UDim2.new(0.6 , 0 , 0 , 15),
+		Font = Enum.Font.GothamMedium,
+		Text = 'No tool',
+		TextColor3 = role('Text' , WHITE),
+		TextSize = 12,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		ZIndex = 17,
+	} , WeaponFrame);
+
+	local WeaponSub = make('TextLabel' , {
+		BackgroundTransparency = 1,
+		Position = UDim2.fromOffset(10 , 20),
+		Size = UDim2.new(0.6 , 0 , 0 , 12),
+		Font = Enum.Font.GothamMedium,
+		Text = 'Hands empty',
+		TextColor3 = role('TextDim' , WHITE),
+		TextSize = 10,
+		TextTransparency = 0.2,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		ZIndex = 17,
+	} , WeaponFrame);
+
+	-- патроны: число и «/ максимум» справа
+	local AmmoRow = make('Frame' , {
+		AnchorPoint = Vector2.new(1 , 0),
+		BackgroundTransparency = 1,
+		Position = UDim2.new(1 , -10 , 0 , 4),
+		Size = UDim2.new(0.4 , 0 , 0 , 22),
+		Visible = false,
+		ZIndex = 17,
+	} , WeaponFrame);
+
+	make('UIListLayout' , {
+		FillDirection = Enum.FillDirection.Horizontal,
+		HorizontalAlignment = Enum.HorizontalAlignment.Right,
+		VerticalAlignment = Enum.VerticalAlignment.Bottom,
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Padding = UDim.new(0 , 3),
+	} , AmmoRow);
+
+	local WeaponAmmo = make('TextLabel' , {
+		AutomaticSize = Enum.AutomaticSize.XY,
+		BackgroundTransparency = 1,
+		FontFace = italic(Enum.FontWeight.ExtraBold),
+		LayoutOrder = 1,
+		Size = UDim2.fromOffset(0 , 0),
+		Text = '',
+		TextColor3 = role('Text' , WHITE),
+		TextSize = 18,
+		ZIndex = 18,
+	} , AmmoRow);
+
+	local WeaponMax = make('TextLabel' , {
+		AutomaticSize = Enum.AutomaticSize.XY,
+		BackgroundTransparency = 1,
+		FontFace = italic(Enum.FontWeight.Bold),
+		LayoutOrder = 2,
+		Size = UDim2.fromOffset(0 , 0),
+		Text = '',
+		TextColor3 = role('Text' , WHITE),
+		TextSize = 11,
+		TextTransparency = 0.35,
+		ZIndex = 18,
+	} , AmmoRow);
 
 	-- ===== оформление =====
 	local function paint()
@@ -12304,18 +12392,172 @@ function NeverLose:CreateTargetCard(Config)
 		end;
 	end;
 
+	-- ===== оружие =====
+	local WeaponConns = {};
+
+	local function clearWeaponConns()
+		for _ , c in next , WeaponConns do
+			c:Disconnect();
+		end;
+
+		table.clear(WeaponConns);
+	end;
+
+	setWeapon = function(tool)
+		if not tool then
+			WeaponName.Text = 'No tool';
+			WeaponSub.Text = 'Hands empty';
+			AmmoRow.Visible = false;
+			return;
+		end;
+
+		WeaponName.Text = tool.Name;
+
+		local ammo = tool:FindFirstChild('Ammo');
+
+		-- нет Ammo - ближнее оружие, патроны не показываем
+		if not (ammo and ammo:IsA('ValueBase') and tonumber(ammo.Value)) then
+			WeaponSub.Text = 'Melee';
+			AmmoRow.Visible = false;
+			return;
+		end;
+
+		local a = math.floor(tonumber(ammo.Value));
+		local maxAmmo = tool:FindFirstChild('MaxAmmo');
+		local mx = maxAmmo and maxAmmo:IsA('ValueBase') and tonumber(maxAmmo.Value) or nil;
+
+		WeaponSub.Text = 'Equipped';
+		WeaponAmmo.Text = tostring(a);
+		WeaponAmmo.TextColor3 = (a <= 0) and RED or role('Text' , WHITE);
+		WeaponMax.Text = mx and ('/ ' .. tostring(math.floor(mx))) or '';
+		AmmoRow.Visible = true;
+	end;
+
+	bindWeapon = function(char)
+		clearWeaponConns();
+
+		local tool = char and char:FindFirstChildOfClass('Tool') or nil;
+
+		setWeapon(tool);
+
+		if tool then
+			for _ , n in next , { 'Ammo' , 'MaxAmmo' } do
+				local v = tool:FindFirstChild(n);
+
+				if v and v:IsA('ValueBase') then
+					table.insert(WeaponConns , NeverLose:AddSignal(v.Changed:Connect(function()
+						setWeapon(tool);
+					end)));
+				end;
+			end;
+
+			table.insert(WeaponConns , NeverLose:AddSignal(tool.ChildAdded:Connect(function()
+				setWeapon(tool);
+			end)));
+
+			table.insert(WeaponConns , NeverLose:AddSignal(tool.ChildRemoved:Connect(function()
+				setWeapon(tool);
+			end)));
+		end;
+
+		-- сменили инструмент в руках
+		if char then
+			table.insert(WeaponConns , NeverLose:AddSignal(char.ChildAdded:Connect(function(c)
+				if c:IsA('Tool') then
+					bindWeapon(char);
+				end;
+			end)));
+
+			table.insert(WeaponConns , NeverLose:AddSignal(char.ChildRemoved:Connect(function(c)
+				if c:IsA('Tool') then
+					bindWeapon(char);
+				end;
+			end)));
+		end;
+	end;
+
 	local function showEmpty()
 		NameLabel.Text = 'No target';
 		HpNum.Text = '-';
 		HpMax.Text = '';
-		TeamLabel.Text = 'Team: -';
+		TeamLabel.Text = 'No crew';
 		DistLabel.Text = '-';
 		Avatar.Image = '';
 		LastRatio = 1;
 		Fill.Size = UDim2.fromScale(0 , 1);
 		Ghost.Size = UDim2.fromScale(0 , 1);
 		setArmor(0);
+		setWeapon(nil);
 		colorHealth();
+	end;
+
+	-- ===== группа (crew) =====
+	-- ID: player.DataFolder.Information.Crew.Value (пусто или 0 - группы нет)
+	-- Название: GroupService:GetGroupInfoAsync(ID). Кэш, при ошибке повтор через 10 с.
+	local GroupService = game:GetService('GroupService');
+	local CrewNames = {};
+	local CrewPending = {};
+	local CrewFailedAt = {};
+
+	local function getCrewId(player)
+		local data = player and player:FindFirstChild('DataFolder');
+		local info = data and data:FindFirstChild('Information');
+		local crew = info and info:FindFirstChild('Crew');
+
+		if not crew or not crew:IsA('ValueBase') then
+			return nil;
+		end;
+
+		local id = tonumber(crew.Value);
+
+		if id and id > 0 then
+			return math.floor(id);
+		end;
+
+		return nil;
+	end;
+
+	local function setCrewLabel(id)
+		if not id then
+			TeamLabel.Text = 'No crew';
+			return;
+		end;
+
+		if CrewNames[id] then
+			TeamLabel.Text = CrewNames[id];
+			return;
+		end;
+
+		if CrewFailedAt[id] and os.clock() - CrewFailedAt[id] < 10 then
+			TeamLabel.Text = 'Group #' .. tostring(id);
+			return;
+		end;
+
+		TeamLabel.Text = 'Loading...';
+
+		if CrewPending[id] then
+			return;
+		end;
+
+		CrewPending[id] = true;
+
+		task.spawn(function()
+			local ok , info = pcall(GroupService.GetGroupInfoAsync , GroupService , id);
+
+			CrewPending[id] = nil;
+
+			if ok and info and info.Name then
+				CrewNames[id] = info.Name;
+				CrewFailedAt[id] = nil;
+			else
+				CrewFailedAt[id] = os.clock();
+			end;
+
+			-- обновляем, только если ещё та же группа у цели
+			if Target and getCrewId(Target) == id then
+				setCrewLabel(id);
+			end;
+		end);
 	end;
 
 	local function distanceTo(player)
@@ -12397,6 +12639,7 @@ function NeverLose:CreateTargetCard(Config)
 		local my = Token;
 
 		bindArmor(char);
+		bindWeapon(char);
 
 		task.spawn(function()
 			local hum = char:WaitForChild('Humanoid' , 5);
@@ -12424,6 +12667,7 @@ function NeverLose:CreateTargetCard(Config)
 		table.clear(TargetConns);
 		clearHumConns();
 		clearArmorConns();
+		clearWeaponConns();
 
 		Target = player;
 		Token += 1;
@@ -12437,22 +12681,17 @@ function NeverLose:CreateTargetCard(Config)
 		end;
 
 		NameLabel.Text = Target.DisplayName;
-		TeamLabel.Text = 'Team: ' .. ((Target.Team and Target.Team.Name) or 'None');
+		setCrewLabel(getCrewId(Target));
 		DistLabel.Text = '-';
 		setAvatar(Target);
 
 		table.insert(TargetConns , Target.CharacterAdded:Connect(onCharacter));
 
-		table.insert(TargetConns , Target:GetPropertyChangedSignal('Team'):Connect(function()
-			if Target then
-				TeamLabel.Text = 'Team: ' .. ((Target.Team and Target.Team.Name) or 'None');
-			end;
-		end));
-
 		if Target.Character then
 			onCharacter(Target.Character);
 		else
 			bindArmor(nil);
+			bindWeapon(nil);
 			bindHumanoid();
 		end;
 
@@ -12460,6 +12699,7 @@ function NeverLose:CreateTargetCard(Config)
 		task.spawn(function()
 			while my == Token and Target do
 				local d = distanceTo(Target);
+				setCrewLabel(getCrewId(Target));
 
 				DistLabel.Text = d and string.format('%.1f m' , d) or '-';
 				task.wait(0.2);
@@ -12500,6 +12740,7 @@ function NeverLose:CreateTargetCard(Config)
 		table.clear(TargetConns);
 		clearHumConns();
 		clearArmorConns();
+		clearWeaponConns();
 		Root:Destroy();
 	end;
 
