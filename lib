@@ -11972,7 +11972,7 @@ function NeverLose:CreateTargetCard(Config)
 		BackgroundTransparency = 0.12,
 		ClipsDescendants = true,
 		Position = Config.Position,
-		Size = UDim2.fromOffset(Config.Width , 182),
+		Size = UDim2.fromOffset(Config.Width , 186),
 		Visible = Config.Visible and true or false,
 		ZIndex = 15,
 	} , NeverLose.ScreenGui);
@@ -12028,7 +12028,7 @@ function NeverLose:CreateTargetCard(Config)
 	local Info = make('Frame' , {
 		BackgroundTransparency = 1,
 		Position = UDim2.fromOffset(73 , 40),
-		Size = UDim2.new(1 , -84 , 0 , 90),
+		Size = UDim2.new(1 , -84 , 0 , 56),
 		ZIndex = 16,
 	} , Root);
 
@@ -12115,10 +12115,10 @@ function NeverLose:CreateTargetCard(Config)
 		BackgroundColor3 = WHITE,
 		BackgroundTransparency = 0.85,
 		ClipsDescendants = true,
-		Position = UDim2.fromOffset(0 , 57),
-		Size = UDim2.new(1 , 0 , 0 , 3),
+		Position = UDim2.fromOffset(11 , 102),
+		Size = UDim2.new(1 , -22 , 0 , 3),
 		ZIndex = 17,
-	} , Info);
+	} , Root);
 
 	make('UICorner' , { CornerRadius = UDim.new(0 , 2) } , ArTrack);
 
@@ -12133,10 +12133,10 @@ function NeverLose:CreateTargetCard(Config)
 		BackgroundColor3 = WHITE,
 		BackgroundTransparency = 0.85,
 		ClipsDescendants = true,
-		Position = UDim2.fromOffset(0 , 65),
-		Size = UDim2.new(1 , 0 , 0 , 9),
+		Position = UDim2.fromOffset(11 , 111),
+		Size = UDim2.new(1 , -22 , 0 , 9),
 		ZIndex = 17,
-	} , Info);
+	} , Root);
 
 	make('UICorner' , { CornerRadius = UDim.new(0 , 4) } , Track);
 
@@ -12170,10 +12170,10 @@ function NeverLose:CreateTargetCard(Config)
 	-- команда и дистанция
 	local MetaRow = make('Frame' , {
 		BackgroundTransparency = 1,
-		Position = UDim2.fromOffset(0 , 78),
-		Size = UDim2.new(1 , 0 , 0 , 12),
+		Position = UDim2.fromOffset(11 , 124),
+		Size = UDim2.new(1 , -22 , 0 , 12),
 		ZIndex = 17,
-	} , Info);
+	} , Root);
 
 	local TeamLabel = make('TextLabel' , {
 		BackgroundTransparency = 1,
@@ -12205,7 +12205,7 @@ function NeverLose:CreateTargetCard(Config)
 		BackgroundColor3 = role('Track' , Color3.fromRGB(30 , 29 , 36)),
 		BackgroundTransparency = 0.15,
 		ClipsDescendants = true,
-		Position = UDim2.fromOffset(11 , 138),
+		Position = UDim2.fromOffset(11 , 142),
 		Size = UDim2.new(1 , -22 , 0 , 38),
 		ZIndex = 16,
 	} , Root);
