@@ -5087,15 +5087,17 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 		end;
 
 		-- размер текста не масштабируется: Size меняет только геометрию
-		local NameSize = 13;
-		local FontSize = 12;
+		-- минимумы: поле не ниже 20px, пункты не ниже 20px, между подписью и полем не меньше 6px, шрифт не меньше 10px
+		local NameSize = math.max(10 , S(13));
+		local FontSize = math.max(10 , S(12));
 		local IconSize = math.clamp(S(16) , 11 , 18);
-		local ChevSize = S(20);
-		local FieldY = S(26);
-		local FieldH = S(26);
-		local SearchH = S(24);
-		local Pad = S(3);
-		local ItemH = S(25);
+		local ChevSize = math.max(14 , S(20));
+		local LabelH = math.max(14 , S(15));
+		local FieldH = math.max(20 , S(26));
+		local FieldY = math.max(S(26) , S(6) + LabelH + 6);
+		local SearchH = math.max(20 , S(24));
+		local Pad = math.max(2 , S(3));
+		local ItemH = math.max(20 , S(25));
 		local ClosedH = FieldY + FieldH + S(6);
 		local PanelTop = FieldY + FieldH + S(4);
 
@@ -5138,7 +5140,7 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 		local NameLabel = make('TextLabel' , {
 			BackgroundTransparency = 1,
 			Position = UDim2.new(0 , 11 , 0 , S(6)),
-			Size = UDim2.new(1 , -22 , 0 , S(15)),
+			Size = UDim2.new(1 , -22 , 0 , LabelH),
 			ZIndex = Z + 9,
 			Font = Enum.Font.GothamMedium,
 			Text = Config.Name,
@@ -5852,10 +5854,12 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 		end;
 
 		-- размер текста не масштабируется: Size меняет только геометрию
-		local NameSize = 13;
-		local ValText = 10;
-		local BarY = S(26);
-		local BarH = S(26);
+		-- минимумы: полоса и поле значения не ниже 18/16px, между подписью и полосой не меньше 6px, шрифт не меньше 10px
+		local NameSize = math.max(10 , S(13));
+		local ValText = math.max(10 , S(10));
+		local ValH = math.max(16 , S(18));
+		local BarY = math.max(S(26) , S(4) + ValH + 6);
+		local BarH = math.max(18 , S(26));
 		local RootH = BarY + BarH + S(6);
 
 		local function span()
@@ -5924,7 +5928,7 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 			AnchorPoint = Vector2.new(1 , 0),
 			BackgroundColor3 = NeverLose.Theme.Field,
 			Position = UDim2.new(1 , -11 , 0 , S(4)),
-			Size = UDim2.new(0 , ValueW , 0 , S(18)),
+			Size = UDim2.new(0 , ValueW , 0 , ValH),
 			ZIndex = Z + 10,
 		} , Root);
 		make('UICorner' , { CornerRadius = UDim.new(0 , S(4)) } , ValueFrame);
