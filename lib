@@ -5964,6 +5964,34 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 		make('UICorner' , { CornerRadius = UDim.new(0 , S(8)) } , SlideMoving);
 		make('UISizeConstraint' , { MinSize = Vector2.new(S(14) , 0) } , SlideMoving);
 
+		-- режим Plain: градиент акцента со светлым верхним краем, скруглён с обоих концов, без полоски
+		local PlainGrad = nil;
+
+		local function PlainSeq(c)
+			return ColorSequence.new({
+				ColorSequenceKeypoint.new(0 , c:Lerp(Color3.new(1 , 1 , 1) , 0.25)),
+				ColorSequenceKeypoint.new(0.45 , c),
+				ColorSequenceKeypoint.new(1 , c:Lerp(Color3.new(0 , 0 , 0) , 0.2)),
+			});
+		end;
+
+		if Config.Mode == 'Plain' then
+			SlideMoving.BackgroundColor3 = Color3.fromRGB(255 , 255 , 255);
+
+			PlainGrad = make('UIGradient' , {
+				Color = PlainSeq(NeverLose.Theme.Accent),
+				Rotation = 90,
+			} , SlideMoving);
+
+			make('Frame' , {
+				BackgroundColor3 = Color3.fromRGB(255 , 255 , 255),
+				BackgroundTransparency = 0.72,
+				Position = UDim2.new(0 , S(4) , 0 , 1),
+				Size = UDim2.new(1 , -S(8) , 0 , 1),
+				ZIndex = Z + 11,
+			} , SlideMoving);
+		end;
+
 		-- белая ручка на конце заливки
 		local Knob = make('Frame' , {
 			AnchorPoint = Vector2.new(1 , 0.5),
@@ -6057,7 +6085,11 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 			ValueBox.TextColor3 = NeverLose.Theme.Text;
 			SlideMain.BackgroundColor3 = NeverLose.Theme.Deep;
 			SlideStroke.Color = NeverLose.Theme.Stroke;
-			SlideMoving.BackgroundColor3 = NeverLose.Theme.Accent;
+			if Config.Mode == 'Plain' then
+				if PlainGrad then PlainGrad.Color = PlainSeq(NeverLose.Theme.Accent) end;
+			else
+				SlideMoving.BackgroundColor3 = NeverLose.Theme.Accent;
+			end;
 		end;
 
 		function Lib:GetValue()
