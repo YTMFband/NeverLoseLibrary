@@ -3058,7 +3058,19 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 
 		Keybind.Name = NeverLose.RandomString();
 		Keybind.Parent = Handler
-		Keybind.BackgroundColor3 = NeverLose.Theme.Field
+		Keybind.BackgroundColor3 = Color3.fromRGB(255 , 255 , 255)
+		local KeybindGrad = Instance.new("UIGradient")
+		KeybindGrad.Color = ColorSequence.new(NeverLose.Theme.Field:Lerp(Color3.new(1 , 1 , 1) , 0.07) , NeverLose.Theme.Field)
+		KeybindGrad.Rotation = 90
+		KeybindGrad.Parent = Keybind
+		local KeybindEdge = Instance.new("Frame")
+		KeybindEdge.Parent = Keybind
+		KeybindEdge.BackgroundColor3 = Color3.fromRGB(255 , 255 , 255)
+		KeybindEdge.BackgroundTransparency = 0.88
+		KeybindEdge.BorderSizePixel = 0
+		KeybindEdge.Position = UDim2.new(0 , 4 , 0 , 1)
+		KeybindEdge.Size = UDim2.new(1 , -8 , 0 , 1)
+		KeybindEdge.ZIndex = 16
 		Keybind.BorderColor3 = Color3.fromRGB(0, 0, 0)
 		Keybind.BorderSizePixel = 0
 		Keybind.ClipsDescendants = true
@@ -3346,8 +3358,34 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 			Menu.BackgroundColor3 = NeverLose.MainColor;
 			Menu.BackgroundTransparency = 0.05;
 			Menu.BorderSizePixel = 0;
-			Menu.Size = UDim2.new(0 , Width , 0 , #Items * Row + 10);
+			Menu.Size = UDim2.new(0 , Width , 0 , #Items * Row + 32);
 			Menu.ZIndex = 170;
+			Menu.ClipsDescendants = true;
+
+			local MenuHead = Instance.new('Frame');
+			MenuHead.Parent = Menu;
+			MenuHead.BackgroundColor3 = Color3.fromRGB(255 , 255 , 255);
+			MenuHead.BorderSizePixel = 0;
+			MenuHead.Size = UDim2.new(1 , 0 , 0 , 22);
+			MenuHead.ZIndex = 171;
+
+			local MHGrad = Instance.new('UIGradient');
+			MHGrad.Color = ColorSequence.new(NeverLose.Theme.Field:Lerp(Color3.new(1 , 1 , 1) , 0.07) , NeverLose.Theme.Field);
+			MHGrad.Rotation = 90;
+			MHGrad.Parent = MenuHead;
+
+			local MHText = Instance.new('TextLabel');
+			MHText.Parent = MenuHead;
+			MHText.BackgroundTransparency = 1;
+			MHText.Position = UDim2.new(0 , 9 , 0 , 0);
+			MHText.Size = UDim2.new(1 , -18 , 1 , 0);
+			MHText.Font = Enum.Font.GothamMedium;
+			MHText.Text = 'MODE';
+			MHText.TextColor3 = NeverLose.Theme.Text;
+			MHText.TextSize = 10;
+			MHText.TextTransparency = 0.4;
+			MHText.TextXAlignment = Enum.TextXAlignment.Left;
+			MHText.ZIndex = 172;
 
 			-- пока меню открыто, окно настроек (шестерёнка) не должно закрываться от клика по нашему меню
 			FlagsHeld = true;
@@ -3379,6 +3417,8 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 						local on = (KeybindLib.Mode == name);
 
 						b.TextColor3 = on and NeverLose.AccentColor or Color3.fromRGB(255 , 255 , 255);
+						b.BackgroundColor3 = NeverLose.AccentColor;
+						b.BackgroundTransparency = on and 0.8 or 1;
 						b.TextTransparency = on and 0 or 0.35;
 					end;
 				end;
@@ -3393,7 +3433,7 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 				B.BackgroundColor3 = NeverLose.Theme.Elem;
 				B.BackgroundTransparency = 1;
 				B.BorderSizePixel = 0;
-				B.Position = UDim2.new(0 , 5 , 0 , 5 + (i - 1) * Row);
+				B.Position = UDim2.new(0 , 5 , 0 , 27 + (i - 1) * Row);
 				B.Size = UDim2.new(1 , -10 , 0 , Row - 2);
 				B.ZIndex = 171;
 				B.Font = Enum.Font.GothamMedium;
@@ -3432,7 +3472,7 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 			Divider.BackgroundColor3 = NeverLose.Theme.Stroke;
 			Divider.BackgroundTransparency = 0.4;
 			Divider.BorderSizePixel = 0;
-			Divider.Position = UDim2.new(0 , 8 , 0 , 5 + 3 * Row - 1);
+			Divider.Position = UDim2.new(0 , 8 , 0 , 27 + 3 * Row - 1);
 			Divider.Size = UDim2.new(1 , -16 , 0 , 1);
 			Divider.ZIndex = 171;
 			Divider.Visible = Config.AllowModeChange and true or false;
@@ -3482,6 +3522,8 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 			IsBinding = true;
 
 			ValueLabel.Text = "...";
+			UIStroke.Color = NeverLose.AccentColor;
+			UIStroke.Transparency = 0.2;
 
 			KeybindLib:Update();
 
@@ -3518,6 +3560,8 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 			Config.Default = KeyName;
 
 			ValueLabel.Text = NeverLose:KeyCodeToStr(KeyName);
+			UIStroke.Color = NeverLose.Theme.Stroke;
+			UIStroke.Transparency = 0.65;
 
 			KeybindLib:Update();
 
@@ -5161,13 +5205,48 @@ function NeverLose:RegisiterItem(Frame: Frame , Signel)
 
 		----------------------------------------------------------- поле
 		local Field = make('Frame' , {
-			BackgroundColor3 = NeverLose.Theme.Field,
+			BackgroundColor3 = Color3.fromRGB(255 , 255 , 255),
 			Position = UDim2.new(0 , 11 , 0 , FieldY),
 			Size = UDim2.new(1 , -22 , 0 , FieldH),
 			ZIndex = Z + 10,
 		} , Root);
 		corner(Field , S(6));
-		stroke(Field);
+		local FieldStroke = stroke(Field);
+
+		-- вариант B: мягкий градиент сверху вниз и светлый верхний край
+		local function FieldSeq()
+			local base = (NeverLose.Theme and NeverLose.Theme.Field) or Color3.fromRGB(26 , 28 , 36);
+
+			return ColorSequence.new(base:Lerp(Color3.new(1 , 1 , 1) , 0.07) , base);
+		end;
+
+		local FieldGrad = make('UIGradient' , { Color = FieldSeq(), Rotation = 90 } , Field);
+
+		make('Frame' , {
+			BackgroundColor3 = Color3.fromRGB(255 , 255 , 255),
+			BackgroundTransparency = 0.88,
+			Position = UDim2.new(0 , S(4) , 0 , 1),
+			Size = UDim2.new(1 , -S(8) , 0 , 1),
+			ZIndex = Z + 11,
+		} , Field);
+
+		NeverLose:AddSignal(Field.MouseEnter:Connect(function()
+			FieldStroke.Color = NeverLose.Theme.Accent;
+			FieldStroke.Transparency = 0.3;
+		end));
+
+		NeverLose:AddSignal(Field.MouseLeave:Connect(function()
+			FieldStroke.Color = Color3.fromRGB(45 , 48 , 58);
+			FieldStroke.Transparency = 0.65;
+		end));
+
+		table.insert(NeverLose.ThemeListeners , function()
+			if not Root.Parent then
+				return false;
+			end;
+
+			FieldGrad.Color = FieldSeq();
+		end);
 
 		local FieldLabel = make('TextLabel' , {
 			BackgroundTransparency = 1,
@@ -10464,10 +10543,37 @@ function NeverLose:CreateKeybindList(Config)
 
 	Header.Name = NeverLose.RandomString();
 	Header.Parent = Root;
-	Header.BackgroundTransparency = 1;
+	Header.BackgroundColor3 = Color3.fromRGB(255 , 255 , 255);
+	Header.BackgroundTransparency = 0;
 	Header.BorderSizePixel = 0;
 	Header.Size = UDim2.new(1 , 0 , 0 , 26);
 	Header.ZIndex = Z + 1;
+
+	local function headSeq(base)
+		return ColorSequence.new(base:Lerp(Color3.new(1 , 1 , 1) , 0.07) , base);
+	end;
+
+	local HeaderGrad = Instance.new('UIGradient');
+	HeaderGrad.Color = headSeq(NeverLose.Theme.Field);
+	HeaderGrad.Rotation = 90;
+	HeaderGrad.Parent = Header;
+
+	local HeaderEdge = Instance.new('Frame');
+	HeaderEdge.Parent = Header;
+	HeaderEdge.BackgroundColor3 = Color3.fromRGB(255 , 255 , 255);
+	HeaderEdge.BackgroundTransparency = 0.88;
+	HeaderEdge.BorderSizePixel = 0;
+	HeaderEdge.Position = UDim2.new(0 , 4 , 0 , 1);
+	HeaderEdge.Size = UDim2.new(1 , -8 , 0 , 1);
+	HeaderEdge.ZIndex = Z + 2;
+
+	table.insert(NeverLose.ThemeListeners , function()
+		if not Root.Parent then
+			return false;
+		end;
+
+		HeaderGrad.Color = headSeq(NeverLose.Theme.Field);
+	end);
 
 	Title.Name = NeverLose.RandomString();
 	Title.Parent = Header;
@@ -10486,7 +10592,7 @@ function NeverLose:CreateKeybindList(Config)
 	AccentLine.Name = NeverLose.RandomString();
 	AccentLine.Parent = Header;
 	AccentLine.AnchorPoint = Vector2.new(0.5 , 1);
-	AccentLine.BackgroundColor3 = NeverLose.AccentColor;
+	AccentLine.BackgroundColor3 = NeverLose.Theme.Stroke;
 	AccentLine.BorderSizePixel = 0;
 	AccentLine.Position = UDim2.new(0.5 , 0 , 1 , 0);
 	AccentLine.Size = UDim2.new(1 , -16 , 0 , 1);
