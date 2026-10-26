@@ -8016,7 +8016,7 @@ function NeverLose:CreateWindow(Config)
 	ConfigName.Size = UDim2.new(1, -7, 0, 15)
 	ConfigName.ZIndex = 9
 	ConfigName.Font = Enum.Font.GothamMedium
-	ConfigName.Text = "Default"
+	ConfigName.Text = "No config"
 	ConfigName.TextColor3 = NeverLose.Theme.Text
 	ConfigName.TextSize = 12.000
 	ConfigName.TextTransparency = 0.350
@@ -9194,7 +9194,7 @@ function NeverLose:CreateWindow(Config)
 		ConfigLib.SetRender(false);
 		ConfigSignal:Connect(ConfigLib.SetRender);
 		ConfigLib.UnsafeThread = nil;
-		ConfigLib.SelectedConfig = "Default";
+		ConfigLib.SelectedConfig = nil;
 
 		local UpdateSize = LPH_NO_VIRTUALIZE(function()
 			local size = NeverLose.GetTextSize(ConfigName.Text , ConfigName.TextSize,ConfigName.Font,Vector2.new(math.huge,math.huge));
@@ -9208,22 +9208,32 @@ function NeverLose:CreateWindow(Config)
 
 		function ConfigLib:GetData(performance)
 			local ikc = {};
+			local skipped = {};
 			
 			local cd = 0;
 			for Flag,v in next , NeverLose.Flags do
 				if v and v.GetValue then
-					local data = v:GetValue();
+					local gok , data = pcall(v.GetValue , v);
 
-					if typeof(data) == 'Color3' then
+					if not gok then
+						table.insert(skipped , Flag .. ' (GetValue error)');
+					elseif typeof(data) == 'Color3' then
 						table.insert(ikc,{
 							Idx = Flag,
 							Value = data:ToHex(),
 						});
 					else
-						table.insert(ikc,{
-							Idx = Flag,
-							Value = data
-						});
+						-- проверяем, что значение кодируется в JSON (NaN, inf, функции и т.п. не кодируются)
+						local eok = pcall(HttpService.JSONEncode , HttpService , { Value = data });
+
+						if eok then
+							table.insert(ikc,{
+								Idx = Flag,
+								Value = data
+							});
+						else
+							table.insert(skipped , Flag .. ' (value cannot be saved)');
+						end;
 					end;
 				end;
 				
@@ -9236,7 +9246,41 @@ function NeverLose:CreateWindow(Config)
 				cd += 1;
 			end;
 
-			return NeverLose.Base64Encode(Encryption.new(HttpService:JSONEncode(ikc)));
+			local okj , json = pcall(HttpService.JSONEncode , HttpService , ikc);
+
+			if not okj then
+				return nil , 'encode failed: ' .. tostring(json);
+			end;
+
+			return NeverLose.Base64Encode(Encryption.new(json)) , skipped;
+		end;
+
+		-- запись конфига: при ошибке показываем сообщение с причиной (не молча)
+		function ConfigLib:Write(path)
+			local gok , data , info = pcall(ConfigLib.GetData , ConfigLib);
+
+			if not gok then
+				Logging.new("folder" , 'Config not saved: ' .. tostring(data) , 6);
+				return false;
+			end;
+
+			if not data then
+				Logging.new("folder" , 'Config not saved: ' .. tostring(info) , 6);
+				return false;
+			end;
+
+			if info and #info > 0 then
+				Logging.new("folder" , 'Skipped: ' .. table.concat(info , ', ') , 6);
+			end;
+
+			local wok , werr = pcall(writefile , path , data);
+
+			if not wok then
+				Logging.new("folder" , 'Write failed: ' .. tostring(werr) , 6);
+				return false;
+			end;
+
+			return true;
 		end;
 
 		function ConfigLib:LoadData(data)
@@ -9256,10 +9300,6 @@ function NeverLose:CreateWindow(Config)
 		function ConfigLib:RefreshConfig()
 			if not isfolder(Window.ConfigFolder) then
 				makefolder(Window.ConfigFolder);
-			end;
-			
-			if not isfile(Window.ConfigFolder..'/Default') then
-				writefile(Window.ConfigFolder..'/Default',ConfigLib:GetData());
 			end;
 			
 			for i,v in next,ConfigMenu:GetChildren() do
@@ -9566,12 +9606,14 @@ function NeverLose:CreateWindow(Config)
 		end);
 
 		local hover_write = NeverLose:CreateInput(ConfigIcon,function()
+			if not ConfigLib.SelectedConfig then
+				Logging.new("folder" , 'Select or create a config first' , 4);
+				return;
+			end;
 			local path = Window.ConfigFolder..'/'..(ConfigLib.SelectedConfig or "Default");
 
-			if isfile(path) then
-				writefile(Window.ConfigFolder..'/'..(ConfigLib.SelectedConfig or "Default"),ConfigLib:GetData());
-
-				Logging.new("folder",'Saved '..tostring(ConfigLib.SelectedConfig),3.5)
+			if ConfigLib:Write(path) then
+				Logging.new("folder",'Saved '..tostring(ConfigLib.SelectedConfig or "Default"),3.5)
 			end;
 		end);
 
@@ -9589,12 +9631,22 @@ function NeverLose:CreateWindow(Config)
 
 
 		local mv = NeverLose:CreateInput(LoadConfig , function()
-			local cfg_name = TextBox.Text;
+			local cfg_name = TextBox.Text or "";
+			local trimmed = (cfg_name:gsub("%s" , ""));
 
-			if cfg_name and cfg_name:byte() and not cfg_name:find('/',1,true) and not cfg_name:find('\\',1,true) then
-				cfg_name = string.sub(cfg_name , 1 , 24);
+			if #trimmed == 0 then
+				Logging.new("folder" , 'Type a config name first' , 4);
+				return;
+			end;
 
-				writefile(Window.ConfigFolder..'/'..cfg_name,ConfigLib:GetData());
+			if cfg_name:find('/' , 1 , true) or cfg_name:find('\\' , 1 , true) then
+				Logging.new("folder" , "Name can't contain / or \\" , 4);
+				return;
+			end;
+
+			cfg_name = string.sub(cfg_name , 1 , 24);
+
+			if ConfigLib:Write(Window.ConfigFolder..'/'..cfg_name) then
 				ConfigLib.SelectedConfig = cfg_name;
 				ConfigName.Text = cfg_name;
 
@@ -11078,6 +11130,11 @@ do
 	end;
 
 	local function saveLayout(key , x , y)
+		-- NaN и inf не кодируются в JSON и ломают весь конфиг: такие позиции не сохраняем
+		if not (x == x and y == y) or x == math.huge or x == -math.huge or y == math.huge or y == -math.huge then
+			return;
+		end;
+
 		Mobile.Layout[key] = { x = math.floor(x * 10000) / 10000 , y = math.floor(y * 10000) / 10000 };
 	end;
 
