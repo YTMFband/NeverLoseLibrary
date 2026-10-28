@@ -9789,215 +9789,288 @@ function NeverLose:CreateWindow(Config)
 		end;
 	end;
 
+	-- ============================================================
+	--  WATERMARK
+	--  [NeverLose] | Game | UP 35m 55s | FPS ● 61 | PING ● 27 ms | 14:27
+	--  Ширина бейджа считает сам движок (AutomaticSize), поэтому текст
+	--  не обрезается, а блоки включаются/выключаются без анимаций размера.
+	-- ============================================================
 	function Window:Watermark()
 		if NeverLose.__WatermarkCache then
 			return NeverLose.__WatermarkCache;
 		end;
 
 		local Watermark_lb = {};
-		local Watermark = Instance.new("Frame")
-		local UICorner = Instance.new("UICorner")
-		local UIListLayout = Instance.new("UIListLayout")
-		local Shadow = NeverLose:CreateShadow(Watermark);
+		local Blocks = {};    -- name -> block (для SetShow / IsShown)
+		local Paints = {};    -- функции перекраски всех блоков (смена темы)
+		local Alive = true;   -- false, когда ScreenGui уничтожен (Unload)
+		local LayoutCounter = 10;
 
-		Watermark.Name = NeverLose.RandomString();
-		Watermark.Parent = NeverLose.ScreenGui
-		Watermark.AnchorPoint = Vector2.new(1, 0)
-		Watermark.BackgroundColor3 = NeverLose.Theme.Main
-		Watermark.BackgroundTransparency = 0.200
-		Watermark.BorderColor3 = Color3.fromRGB(0, 0, 0)
-		Watermark.BorderSizePixel = 0
-		Watermark.ClipsDescendants = true
-		Watermark.Position = UDim2.new(1, -10, 0, 10)
-		Watermark.Size = UDim2.new(0, 120, 0, 30)
-		Watermark.ZIndex = 16
+		local GOOD = Color3.fromRGB(60, 220, 130);
+		local WARN = Color3.fromRGB(250, 200, 60);
+		local BAD  = Color3.fromRGB(240, 80, 80);
 
-		UICorner.CornerRadius = UDim.new(0, 25)
-		UICorner.Parent = Watermark
-
-		UIListLayout.Parent = Watermark
-		UIListLayout.FillDirection = Enum.FillDirection.Horizontal
-		UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-		UIListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
-
-		local empty_space = Instance.new('Frame');
-
-		empty_space.Size = UDim2.fromOffset(15,0);
-		empty_space.BackgroundTransparency = 1;
-		empty_space.Parent = Watermark;
-		empty_space.LayoutOrder = 5;
-
-		Watermark:GetPropertyChangedSignal('BackgroundTransparency'):Connect(LPH_NO_VIRTUALIZE(function()
-			if Watermark.BackgroundTransparency > 0.9 then
-				Watermark.Visible = false;
-				Watermark.Parent = nil;
-			else
-				Watermark.Parent = NeverLose.ScreenGui
-				Watermark.Visible = true;
-			end;
-		end));
-
-		UIListLayout:GetPropertyChangedSignal('AbsoluteContentSize'):Connect(LPH_NO_VIRTUALIZE(function()
-			NeverLose.PlayAnimate(Watermark , SlowyTween , {
-				Size = UDim2.new(0, UIListLayout.AbsoluteContentSize.X + 5, 0, 30)
-			})
-		end));
+		Watermark_lb.Renders = {};
+		Watermark_lb.Blocks = Blocks;
+		Watermark_lb.Status = true;
 
 		NeverLose.__WatermarkCache = Watermark_lb;
 
+		-- ---------- контейнер ----------
+		local Watermark = Instance.new('Frame');
+		local UICorner = Instance.new('UICorner');
+		local UIPadding = Instance.new('UIPadding');
+		local UIListLayout = Instance.new('UIListLayout');
+
+		Watermark.Name = NeverLose.RandomString();
+		Watermark.AnchorPoint = Vector2.new(1, 0);
+		Watermark.Position = UDim2.new(1, -10, 0, 10);
+		Watermark.Size = UDim2.new(0, 0, 0, 30);
+		Watermark.AutomaticSize = Enum.AutomaticSize.X;
+		Watermark.BackgroundColor3 = NeverLose.Theme.Main;
+		Watermark.BackgroundTransparency = 0.2;
+		Watermark.BorderSizePixel = 0;
+		Watermark.ClipsDescendants = true;
+		Watermark.ZIndex = 16;
+		Watermark.Parent = NeverLose.ScreenGui;
+
+		UICorner.CornerRadius = UDim.new(0, 25);
+		UICorner.Parent = Watermark;
+
+		UIPadding.PaddingLeft = UDim.new(0, 10);
+		UIPadding.PaddingRight = UDim.new(0, 12);
+		UIPadding.Parent = Watermark;
+
+		UIListLayout.FillDirection = Enum.FillDirection.Horizontal;
+		UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder;
+		UIListLayout.VerticalAlignment = Enum.VerticalAlignment.Center;
+		UIListLayout.Parent = Watermark;
+
+		local Shadow = NeverLose:CreateShadow(Watermark);
 		Shadow:Render(true);
 
-		Watermark_lb.Renders = {};
-		Watermark_lb.Blocks = {};
-		Watermark_lb.Status = true;
+		NeverLose:AddSignal(NeverLose.ScreenGui.Destroying:Connect(function()
+			Alive = false;
+		end));
 
-		function Watermark_lb:SetRender(value)
-			Watermark_lb.Status = value;
+		-- ---------- утилиты ----------
+		-- обрезает строку по количеству символов (UTF-8 безопасно), добавляет '..'
+		local function ShortText(s, max)
+			s = tostring(s or '');
 
-			if value then
-				NeverLose.PlayAnimate(Watermark,SlowyTween , {
-					BackgroundTransparency = 0.200
-				})
+			local len = utf8.len(s);
 
-				Shadow:Render(true);
+			if not len or len <= max then
+				return s;
+			end;
 
-				for i,v in next , Watermark_lb.Renders do
-					pcall(v,true);
-				end;
-			else
-				NeverLose.PlayAnimate(Watermark,SlowyTween , {
-					BackgroundTransparency = 1
-				})
+			local cut = utf8.offset(s, max - 1) or (#s + 1);
 
-				Shadow:Render(false);
-
-				for i,v in next , Watermark_lb.Renders do
-					pcall(v,false);
-				end;
-			end
+			return string.sub(s, 1, cut - 1) .. '..';
 		end;
 
-		function Watermark_lb:AddBlock(IconStr , Name)
-			local InnerBlock = {};
+		local function MakeText(Order, Font, TextSize)
+			local T = Instance.new('TextLabel');
 
-			local Frame = Instance.new("Frame")
-			local Content = Instance.new("TextLabel")
-			local Icon = Instance.new("TextLabel")
+			T.Name = NeverLose.RandomString();
+			T.BackgroundTransparency = 1;
+			T.BorderSizePixel = 0;
+			T.AutomaticSize = Enum.AutomaticSize.X;
+			T.Size = UDim2.new(0, 0, 1, 0);
+			T.Font = Font;
+			T.TextSize = TextSize;
+			T.Text = '';
+			T.TextColor3 = NeverLose.Theme.Text;
+			T.TextTransparency = 1;
+			T.TextXAlignment = Enum.TextXAlignment.Left;
+			T.TextYAlignment = Enum.TextYAlignment.Center;
+			T.TextWrapped = false;
+			T.ZIndex = 17;
+			T.LayoutOrder = Order;
 
-			Frame.Parent = Watermark
-			Frame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-			Frame.BackgroundTransparency = 1.000
-			Frame.BorderColor3 = Color3.fromRGB(0, 0, 0)
-			Frame.BorderSizePixel = 0
-			Frame.Size = UDim2.new(0, 50, 0, 30)
+			return T;
+		end;
 
-			Content.Name = NeverLose.RandomString();
-			Content.Parent = Frame
-			Content.AnchorPoint = Vector2.new(0, 0.5)
-			Content.BackgroundColor3 = NeverLose.Theme.TextDim
-			Content.BackgroundTransparency = 1.000
-			Content.BorderColor3 = Color3.fromRGB(0, 0, 0)
-			Content.BorderSizePixel = 0
-			Content.Position = UDim2.new(0, 35, 0.5, 0)
-			Content.Size = UDim2.new(0, 1, 0, 25)
-			Content.ZIndex = 17
-			Content.Font = Enum.Font.GothamBold
-			Content.Text = Name
-			Content.TextColor3 = NeverLose.Theme.TextDim
-			Content.TextSize = 15.000
-			Content.TextTransparency = 0.200
-			Content.TextXAlignment = Enum.TextXAlignment.Left
+		-- ---------- блоки ----------
+		-- блок = [разделитель] [иконка] [подпись] [точка статуса] [значение]
+		function Watermark_lb:AddBlock(IconStr, Name, Divider)
+			LayoutCounter += 1;
 
-			Icon.Name = NeverLose.RandomString();
-			Icon.Parent = Frame
-			Icon.AnchorPoint = Vector2.new(0, 0.5)
-			Icon.BackgroundColor3 = NeverLose.Theme.TextDim
-			Icon.BackgroundTransparency = 1.000
-			Icon.BorderColor3 = Color3.fromRGB(0, 0, 0)
-			Icon.BorderSizePixel = 0
-			Icon.Position = UDim2.new(0, 10, 0.5, 0)
-			Icon.Size = UDim2.new(0, 20, 0, 20)
-			Icon.ZIndex = 17
+			local Block = { Visible = true, Dot = nil };
+
+			local Frame = Instance.new('Frame');
+			local FrameLayout = Instance.new('UIListLayout');
+			local FramePadding = Instance.new('UIPadding');
+			local Sep = Instance.new('Frame');
+			local Dot = Instance.new('Frame');
+			local DotCorner = Instance.new('UICorner');
+			local Icon = MakeText(2, Enum.Font.GothamBold, 18);
+			local Label = MakeText(3, Enum.Font.GothamMedium, 11);
+			local Value = MakeText(5, Enum.Font.GothamBold, 15);
+
+			Frame.Name = NeverLose.RandomString();
+			Frame.BackgroundTransparency = 1;
+			Frame.BorderSizePixel = 0;
+			Frame.AutomaticSize = Enum.AutomaticSize.X;
+			Frame.Size = UDim2.new(0, 0, 1, 0);
+			Frame.LayoutOrder = LayoutCounter;
+			Frame.ZIndex = 17;
+			Frame.Parent = Watermark;
+
+			FramePadding.PaddingLeft = UDim.new(0, Divider == false and 0 or 9);
+			FramePadding.Parent = Frame;
+
+			FrameLayout.FillDirection = Enum.FillDirection.Horizontal;
+			FrameLayout.SortOrder = Enum.SortOrder.LayoutOrder;
+			FrameLayout.VerticalAlignment = Enum.VerticalAlignment.Center;
+			FrameLayout.Padding = UDim.new(0, 6);
+			FrameLayout.Parent = Frame;
+
+			Sep.Name = NeverLose.RandomString();
+			Sep.BorderSizePixel = 0;
+			Sep.Size = UDim2.new(0, 1, 0, 14);
+			Sep.LayoutOrder = 1;
+			Sep.ZIndex = 17;
+			Sep.BackgroundTransparency = 1;
+			Sep.Visible = Divider ~= false;
+			Sep.Parent = Frame;
+
+			Icon.Text = tostring(IconStr or '');
 			Icon.FontFace = NeverLose.BuiltInBold;
-			Icon.Text = IconStr
-			Icon.TextColor3 = NeverLose.AccentColor
-			Icon.TextSize = 18.000
-			Icon.TextTransparency = 0.250
-			Icon.TextWrapped = true
+			Icon.Visible = Icon.Text ~= '';
+			Icon.Parent = Frame;
 
-			InnerBlock.Update = LPH_NO_VIRTUALIZE(function(value)
-				local size = NeverLose.GetTextSize(Content.Text , Content.TextSize,Content.Font,Vector2.new(math.huge,math.huge))
+			Label.Visible = false;
+			Label.Parent = Frame;
 
-				if InnerBlock.Visible then
-					NeverLose.PlayAnimate(Frame,VSlowTween,{
-						Size = UDim2.new(0, size.X + 35, 0, 30)
-					})
-				else
-					NeverLose.PlayAnimate(Frame,VSlowTween,{
-						Size = UDim2.new(0, 0, 0, 30)
-					})
+			Dot.Name = NeverLose.RandomString();
+			Dot.BorderSizePixel = 0;
+			Dot.Size = UDim2.fromOffset(6, 6);
+			Dot.LayoutOrder = 4;
+			Dot.ZIndex = 17;
+			Dot.BackgroundTransparency = 1;
+			Dot.Visible = false;
+			Dot.Parent = Frame;
+
+			DotCorner.CornerRadius = UDim.new(1, 0);
+			DotCorner.Parent = Dot;
+
+			Value.Parent = Frame;
+
+			-- перекраска под текущую тему
+			local function Paint()
+				Sep.BackgroundColor3 = NeverLose.Theme.TextDim;
+				Icon.TextColor3 = NeverLose.AccentColor;
+				Label.TextColor3 = NeverLose.Theme.TextDim;
+				Value.TextColor3 = NeverLose.Theme.Text;
+
+				if Block.Dot == 'accent' then
+					Dot.BackgroundColor3 = NeverLose.AccentColor;
+				elseif typeof(Block.Dot) == 'Color3' then
+					Dot.BackgroundColor3 = Block.Dot;
 				end;
-			end);
-
-			InnerBlock.Visible = true;
-
-			InnerBlock.Update();
-
-			function InnerBlock:SetVisible(v)
-				InnerBlock.Visible = v;
-
-				if Watermark_lb.Status then
-					InnerBlock.SetRender(v);
-				end;
-
-				InnerBlock.Update();
 			end;
 
-			InnerBlock.SetRender = LPH_NO_VIRTUALIZE(function(value)
-				if value and InnerBlock.Visible then
-					NeverLose.PlayAnimate(Content,SlowyTween , {
-						TextTransparency = 0.200
-					})
+			-- прозрачность под состояние: блок видим и весь watermark включён
+			local function Apply()
+				local on = Watermark_lb.Status and Block.Visible;
 
-					NeverLose.PlayAnimate(Icon,SlowyTween , {
-						TextTransparency = 0.250
-					})
-				else
+				Frame.Visible = Block.Visible;
 
-					NeverLose.PlayAnimate(Content,SlowyTween , {
-						TextTransparency = 1
-					})
+				NeverLose.PlayAnimate(Icon, SlowyTween, { TextTransparency = on and 0.25 or 1 });
+				NeverLose.PlayAnimate(Label, SlowyTween, { TextTransparency = on and 0.35 or 1 });
+				NeverLose.PlayAnimate(Value, SlowyTween, { TextTransparency = on and 0.05 or 1 });
+				NeverLose.PlayAnimate(Dot, SlowyTween, { BackgroundTransparency = on and 0 or 1 });
+				NeverLose.PlayAnimate(Sep, SlowyTween, { BackgroundTransparency = on and 0.8 or 1 });
+			end;
 
-					NeverLose.PlayAnimate(Icon,SlowyTween , {
-						TextTransparency = 1
-					})
+			function Block:SetText(t)
+				t = tostring(t or '');
+
+				if Value.Text ~= t then
+					Value.Text = t;
 				end;
-			end);
-
-			table.insert(Watermark_lb.Renders,InnerBlock.SetRender);
-
-			if Name then
-				Watermark_lb.Blocks[Name] = InnerBlock;
 			end;
 
-			function InnerBlock:SetText(t)
-				Content.Text = t;
+			function Block:SetLabel(t)
+				t = tostring(t or '');
 
-				InnerBlock.Update();
+				Label.Text = t;
+				Label.Visible = t ~= '';
 			end;
 
-			function InnerBlock:Input(func)
-				local c,s = NeverLose:CreateInput(Frame,func);
+			-- nil = без точки, 'accent' = цвет темы, Color3 = свой цвет
+			function Block:SetDot(mode)
+				Block.Dot = mode;
+				Dot.Visible = mode ~= nil;
+
+				Paint();
+			end;
+
+			function Block:SetVisible(v)
+				Block.Visible = v and true or false;
+
+				Apply();
+			end;
+
+			function Block:Input(func)
+				local _, s = NeverLose:CreateInput(Frame, func);
 
 				return s;
 			end;
 
-			return InnerBlock;
+			Block.Frame = Frame;
+			Block.Value = Value;
+
+			Paint();
+			Apply();
+
+			table.insert(Paints, Paint);
+			table.insert(Watermark_lb.Renders, Apply);
+
+			if Name then
+				Blocks[Name] = Block;
+			end;
+
+			return Block;
 		end;
 
-		-- методы: включить / выключить любой блок по имени (встроенные game, uptime и блоки из AddBlock)
-		function Watermark_lb:SetShow(name , value)
-			local block = Watermark_lb.Blocks[name];
+		-- ---------- управление всем watermark ----------
+		function Watermark_lb:SetRender(value)
+			value = value and true or false;
+			Watermark_lb.Status = value;
+
+			if value then
+				Watermark.Visible = true;
+
+				NeverLose.PlayAnimate(Watermark, SlowyTween, {
+					BackgroundTransparency = 0.2
+				});
+
+				Shadow:Render(true);
+			else
+				NeverLose.PlayAnimate(Watermark, SlowyTween, {
+					BackgroundTransparency = 1
+				});
+
+				Shadow:Render(false);
+
+				-- прячем контейнер только после окончания fade-out (раньше он пропадал мгновенно)
+				task.delay(SlowyTween.Time + 0.05, function()
+					if Alive and not Watermark_lb.Status then
+						Watermark.Visible = false;
+					end;
+				end);
+			end;
+
+			for _, apply in next, Watermark_lb.Renders do
+				pcall(apply);
+			end;
+		end;
+
+		-- включить / выключить любой блок по имени (встроенные game, uptime, fps, ping, clock и блоки из AddBlock)
+		function Watermark_lb:SetShow(name, value)
+			local block = Blocks[name];
 
 			if not block then
 				return false;
@@ -10009,42 +10082,124 @@ function NeverLose:CreateWindow(Config)
 		end;
 
 		function Watermark_lb:IsShown(name)
-			local block = Watermark_lb.Blocks[name];
+			local block = Blocks[name];
 
 			return (block and block.Visible) or false;
 		end;
 
-		-- встроенные блоки: название игры и время работы библиотеки
+		-- ---------- встроенные блоки ----------
 		local function FormatUptime()
-			local sec = math.max(0 , math.floor(os.clock() - (NeverLose.StartedAt or 0)));
+			local sec = math.max(0, math.floor(os.clock() - (NeverLose.StartedAt or 0)));
 
 			if sec >= 3600 then
-				return string.format('%dh %02dm' , math.floor(sec / 3600) , math.floor((sec % 3600) / 60));
+				return string.format('%dh %02dm', math.floor(sec / 3600), math.floor((sec % 3600) / 60));
 			end;
 
-			return string.format('%dm %02ds' , math.floor(sec / 60) , sec % 60);
+			return string.format('%dm %02ds', math.floor(sec / 60), sec % 60);
 		end;
 
-		local GameBlock = Watermark_lb:AddBlock('' , 'game');
-		GameBlock:SetText(game.Name);
+		local function ReadPing()
+			local ok, ping = pcall(function()
+				return game:GetService('Stats').Network.ServerStatsItem['Data Ping']:GetValue();
+			end);
+
+			if ok then
+				return tonumber(ping);
+			end;
+
+			return nil;
+		end;
+
+		local Brand = Watermark_lb:AddBlock('', 'brand', false);
+		Brand:SetText('NeverLose');
+		Brand:SetDot('accent');
+
+		local GameBlock = Watermark_lb:AddBlock('', 'game');
+		GameBlock:SetText(ShortText(game.Name, 24));
 
 		task.spawn(function()
-			local ok , info = pcall(function()
+			local ok, info = pcall(function()
 				return game:GetService('MarketplaceService'):GetProductInfo(game.PlaceId);
 			end);
 
-			if ok and info and info.Name then
-				GameBlock:SetText(info.Name);
+			if Alive and ok and info and info.Name then
+				GameBlock:SetText(ShortText(info.Name, 24));
 			end;
 		end);
 
-		local UptimeBlock = Watermark_lb:AddBlock('' , 'uptime');
+		local UptimeBlock = Watermark_lb:AddBlock('', 'uptime');
+		UptimeBlock:SetLabel('UP');
 		UptimeBlock:SetText(FormatUptime());
 
-		task.spawn(function()
-			while true do
+		local FpsBlock = Watermark_lb:AddBlock('', 'fps');
+		FpsBlock:SetLabel('FPS');
+		FpsBlock:SetText('--');
+
+		local PingBlock = Watermark_lb:AddBlock('', 'ping');
+		PingBlock:SetLabel('PING');
+		PingBlock:SetText('-- ms');
+
+		local ClockBlock = Watermark_lb:AddBlock('', 'clock');
+		ClockBlock:SetText(os.date('%H:%M'));
+
+		-- ---------- один общий цикл обновления ----------
+		-- FPS считается каждые 0.5 с по RenderStepped, остальное — раз в секунду.
+		-- Коннект регистрируется через AddSignal, поэтому Unload его отключит;
+		-- кроме того, цикл сам выходит, как только ScreenGui уничтожен.
+		local FrameCount = 0;
+		local FpsWindow = 0;
+		local SecondWindow = 0;
+		local Conn;
+
+		Conn = NeverLose:AddSignal(RunService.RenderStepped:Connect(LPH_NO_VIRTUALIZE(function(dt)
+			if not Alive then
+				Conn:Disconnect();
+				return;
+			end;
+
+			FrameCount += 1;
+			FpsWindow += dt;
+
+			if FpsWindow >= 0.5 then
+				local fps = math.floor(FrameCount / FpsWindow + 0.5);
+
+				FrameCount = 0;
+				FpsWindow = 0;
+
+				FpsBlock:SetText(tostring(fps));
+				FpsBlock:SetDot(fps >= 50 and GOOD or (fps >= 30 and WARN or BAD));
+			end;
+
+			SecondWindow += dt;
+
+			if SecondWindow >= 1 then
+				SecondWindow = 0;
+
 				UptimeBlock:SetText(FormatUptime());
-				task.wait(1);
+				ClockBlock:SetText(os.date('%H:%M'));
+
+				local ping = ReadPing();
+
+				if ping then
+					PingBlock:SetText(string.format('%d ms', math.floor(ping + 0.5)));
+					PingBlock:SetDot(ping <= 80 and GOOD or (ping <= 150 and WARN or BAD));
+				else
+					PingBlock:SetText('-- ms');
+					PingBlock:SetDot(nil);
+				end;
+			end;
+		end)));
+
+		-- смена темы перекрашивает контейнер и все блоки; после Unload слушатель сам удаляется
+		table.insert(NeverLose.ThemeListeners, function()
+			if not Alive then
+				return false;
+			end;
+
+			Watermark.BackgroundColor3 = NeverLose.Theme.Main;
+
+			for _, paint in next, Paints do
+				paint();
 			end;
 		end);
 
