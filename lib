@@ -606,40 +606,50 @@ do
 	local SURFACE = { 'Main' , 'Card' , 'Elem' , 'Elem2' , 'Hover' , 'Field' , 'Deep' , 'Deep2' , 'Track' , 'Stroke' , 'Accent' };
 	local TEXTS = { 'Text' , 'Icon' , 'TextDim' , 'TextMute' , 'Accent' };
 
-	local function key(c)
-		return math.floor(c.R * 255 + 0.5) * 65536 + math.floor(c.G * 255 + 0.5) * 256 + math.floor(c.B * 255 + 0.5);
+	-- расстояние между цветами (сумма разниц каналов, 0..3)
+	local function dist(a , b)
+		return math.abs(a.R - b.R) + math.abs(a.G - b.G) + math.abs(a.B - b.B);
 	end;
 
-	-- перекрашивает уже созданные элементы: старый цвет роли -> новый цвет роли
+	-- допуск: цвет, близкий к роли старой темы, считается этой ролью (0.12 ~ 30/255 по сумме каналов)
+	local MATCH_LIMIT = 0.12;
+
+	local function nearestRole(c , old , roles)
+		local best , bestD = nil , MATCH_LIMIT;
+
+		for _ , r in next , roles do
+			local oc = old[r];
+
+			if oc then
+				local d = dist(c , oc);
+
+				if d <= bestD then
+					best , bestD = r , d;
+				end;
+			end;
+		end;
+
+		return best;
+	end;
+
+	-- перекрашивает уже созданные элементы АВТОМАТИЧЕСКИ: цвет, близкий к роли старой темы,
+	-- получает такую же роль новой темы. Элементам вручную привязывать не нужно.
 	local function recolor(old)
 		local new = NeverLose.Theme;
-		local surf , txt = {} , {};
 
-		for _ , r in next , SURFACE do
-			if old[r] and new[r] then
-				surf[key(old[r])] = new[r];
-			end;
-		end;
-
-		for _ , r in next , TEXTS do
-			if old[r] and new[r] then
-				txt[key(old[r])] = new[r];
-			end;
-		end;
-
-		local function fix(inst , prop , map)
+		local function fix(inst , prop , roles)
 			local ok , cur = pcall(function()
 				return inst[prop];
 			end);
 
-			if not ok then
+			if not ok or typeof(cur) ~= 'Color3' then
 				return;
 			end;
 
-			local nv = map[key(cur)];
+			local r = nearestRole(cur , old , roles);
 
-			if nv and nv ~= cur then
-				inst[prop] = nv;
+			if r and new[r] and new[r] ~= cur then
+				inst[prop] = new[r];
 			end;
 		end;
 
@@ -648,27 +658,27 @@ do
 
 			for _ , d in next , NeverLose.ScreenGui:GetDescendants() do
 				if d:IsA('GuiObject') then
-					fix(d , 'BackgroundColor3' , surf);
+					fix(d , 'BackgroundColor3' , SURFACE);
 				end;
 
 				if d:IsA('TextLabel') or d:IsA('TextButton') or d:IsA('TextBox') then
-					fix(d , 'TextColor3' , txt);
+					fix(d , 'TextColor3' , TEXTS);
 				end;
 
 				if d:IsA('TextBox') then
-					fix(d , 'PlaceholderColor3' , txt);
+					fix(d , 'PlaceholderColor3' , TEXTS);
 				end;
 
 				if d:IsA('ImageLabel') or d:IsA('ImageButton') then
-					fix(d , 'ImageColor3' , txt);
+					fix(d , 'ImageColor3' , TEXTS);
 				end;
 
 				if d:IsA('UIStroke') then
-					fix(d , 'Color' , surf);
+					fix(d , 'Color' , SURFACE);
 				end;
 
 				if d:IsA('ScrollingFrame') then
-					fix(d , 'ScrollBarImageColor3' , surf);
+					fix(d , 'ScrollBarImageColor3' , SURFACE);
 				end;
 
 				n += 1;
@@ -722,6 +732,28 @@ do
 
 	function NeverLose:SetAccent(color)
 		return NeverLose:SetTheme({ Accent = color });
+	end;
+
+	-- привязывает свойство элемента к роли темы: при каждом SetTheme значение обновится само.
+	-- Вызывать ПОСЛЕ того, как элемент получил Parent (иначе слушатель сразу удалится).
+	-- Пример: NeverLose:BindTheme(myFrame, 'BackgroundColor3', 'Main')
+	function NeverLose:BindTheme(Inst, Prop, Role)
+		local function apply()
+			if not Inst.Parent then
+				return false;
+			end;
+
+			local c = NeverLose.Theme[Role];
+
+			if c and Inst[Prop] ~= c then
+				Inst[Prop] = c;
+			end;
+		end;
+
+		apply();
+		table.insert(NeverLose.ThemeListeners , apply);
+
+		return Inst;
 	end;
 
 	function NeverLose:AddTheme(name , roles)
@@ -13197,6 +13229,70 @@ function NeverLose:CreateTargetCard(Config)
 	end));
 
 	return Card;
+end;
+
+-- Редактор темы: dropdown Base theme + колорпикер на каждую роль.
+-- Смена базовой темы ставит все пикеры в значения пресета и применяет тему одним SetTheme.
+-- Смена одного пикера меняет только его роль. Ничего вручную привязывать не нужно.
+function NeverLose:AddThemeEditor(Section, Config)
+	Config = NeverLose:ProcessParams(Config or {}, {
+		Name = 'Base theme',
+		Default = nil,
+		FlagPrefix = 'Theme_',
+		OnBase = EmptyFunction,   -- (themeName)
+		OnRole = EmptyFunction,   -- (roleName, color)
+	});
+
+	local ROLES = { 'Main' , 'Card' , 'Elem' , 'Elem2' , 'Hover' , 'Field' , 'Deep' , 'Deep2' , 'Track' , 'Stroke' , 'Text' , 'Icon' , 'TextDim' , 'TextMute' , 'Accent' };
+
+	local syncing = false;  -- true, пока мы сами выставляем пикеры (их колбеки не должны запускать SetTheme)
+	local pickers = {};
+
+	Section:AddWideDropdown({
+		Name = Config.Name,
+		Values = NeverLose:GetThemeNames(),
+		Default = Config.Default or NeverLose.CurrentTheme,
+		Search = false,
+		MaxVisible = 7,
+		Flag = Config.FlagPrefix .. 'Base',
+		Callback = function(name)
+			if type(name) ~= 'string' or not NeverLose.Themes[name] then
+				return;
+			end;
+
+			syncing = true;
+			NeverLose:SetTheme(name);
+
+			for _ , role in next , ROLES do
+				local p = pickers[role];
+
+				if p and NeverLose.Theme[role] then
+					p:SetValue(NeverLose.Theme[role]);
+				end;
+			end;
+
+			syncing = false;
+
+			Config.OnBase(name);
+		end,
+	});
+
+	for _ , role in next , ROLES do
+		pickers[role] = Section:AddLabel(role):AddColorPicker({
+			Default = NeverLose.Theme[role] or Color3.fromRGB(255 , 255 , 255),
+			Flag = Config.FlagPrefix .. role,
+			Callback = function(color)
+				if syncing then
+					return;
+				end;
+
+				NeverLose:SetTheme({ [role] = color });
+				Config.OnRole(role , color);
+			end,
+		});
+	end;
+
+	return pickers;
 end;
 
 function NeverLose:Unload()
