@@ -263,6 +263,7 @@ NeverLose.Scales = {
 NeverLose.IconColor = Color3.fromRGB(255, 255, 255);
 NeverLose.ScreenGui = GlobalWindow;
 NeverLose.Flags = {};
+NeverLose.StartedAt = os.clock();
 -- ТЕМЫ: цвета интерфейса берутся из ролей NeverLose.Theme
 -- NeverLose:SetTheme('One Dark')  /  NeverLose:SetTheme({ Accent = Color3.fromRGB(255, 80, 120) })
 NeverLose.Themes = {
@@ -9847,6 +9848,7 @@ function NeverLose:CreateWindow(Config)
 		Shadow:Render(true);
 
 		Watermark_lb.Renders = {};
+		Watermark_lb.Blocks = {};
 		Watermark_lb.Status = true;
 
 		function Watermark_lb:SetRender(value)
@@ -9974,6 +9976,10 @@ function NeverLose:CreateWindow(Config)
 
 			table.insert(Watermark_lb.Renders,InnerBlock.SetRender);
 
+			if Name then
+				Watermark_lb.Blocks[Name] = InnerBlock;
+			end;
+
 			function InnerBlock:SetText(t)
 				Content.Text = t;
 
@@ -9988,6 +9994,59 @@ function NeverLose:CreateWindow(Config)
 
 			return InnerBlock;
 		end;
+
+		-- методы: включить / выключить любой блок по имени (встроенные game, uptime и блоки из AddBlock)
+		function Watermark_lb:SetShow(name , value)
+			local block = Watermark_lb.Blocks[name];
+
+			if not block then
+				return false;
+			end;
+
+			block:SetVisible(value and true or false);
+
+			return true;
+		end;
+
+		function Watermark_lb:IsShown(name)
+			local block = Watermark_lb.Blocks[name];
+
+			return (block and block.Visible) or false;
+		end;
+
+		-- встроенные блоки: название игры и время работы библиотеки
+		local function FormatUptime()
+			local sec = math.max(0 , math.floor(os.clock() - (NeverLose.StartedAt or 0)));
+
+			if sec >= 3600 then
+				return string.format('%dh %02dm' , math.floor(sec / 3600) , math.floor((sec % 3600) / 60));
+			end;
+
+			return string.format('%dm %02ds' , math.floor(sec / 60) , sec % 60);
+		end;
+
+		local GameBlock = Watermark_lb:AddBlock('' , 'game');
+		GameBlock:SetText(game.Name);
+
+		task.spawn(function()
+			local ok , info = pcall(function()
+				return game:GetService('MarketplaceService'):GetProductInfo(game.PlaceId);
+			end);
+
+			if ok and info and info.Name then
+				GameBlock:SetText(info.Name);
+			end;
+		end);
+
+		local UptimeBlock = Watermark_lb:AddBlock('' , 'uptime');
+		UptimeBlock:SetText(FormatUptime());
+
+		task.spawn(function()
+			while true do
+				UptimeBlock:SetText(FormatUptime());
+				task.wait(1);
+			end;
+		end);
 
 		return Watermark_lb;
 	end;
