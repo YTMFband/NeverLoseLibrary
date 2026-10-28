@@ -10140,7 +10140,7 @@ function NeverLose:CreateWindow(Config)
 		PingBlock:SetText('-- ms');
 
 		local ClockBlock = Watermark_lb:AddBlock('', 'clock');
-		ClockBlock:SetText(os.date('%H:%M'));
+		ClockBlock:SetText(os.date('%H:%M:%S'));
 
 		-- ---------- один общий цикл обновления ----------
 		-- FPS считается каждые 0.5 с по RenderStepped, остальное — раз в секунду.
@@ -10176,7 +10176,7 @@ function NeverLose:CreateWindow(Config)
 				SecondWindow = 0;
 
 				UptimeBlock:SetText(FormatUptime());
-				ClockBlock:SetText(os.date('%H:%M'));
+				ClockBlock:SetText(os.date('%H:%M:%S'));
 
 				local ping = ReadPing();
 
